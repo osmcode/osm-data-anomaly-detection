@@ -161,7 +161,8 @@ Finds several problems with way geometries:
   (`duplicate-segment`).
 
 This command needs as input an OSM file with node locations on ways. See the
-`osmium [add-locations-to-ways](http://docs.osmcode.org/osmium/latest/osmium-add-locations-to-ways.html)`
+osmium
+[add-locations-to-ways](http://docs.osmcode.org/osmium/latest/osmium-add-locations-to-ways.html)
 command on how to create this.
 
 ### odad-find-relation-problems
