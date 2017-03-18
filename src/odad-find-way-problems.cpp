@@ -276,18 +276,23 @@ public:
         m_layer_way_spike_lines(m_dataset, "way_spike_lines", wkbLineString, {"SPATIAL_INDEX=NO"}),
         m_layer_way_duplicate_segments(m_dataset, "way_duplicate_segments", wkbLineString, {"SPATIAL_INDEX=NO"}),
         m_layer_way_many_nodes(m_dataset, "way_many_nodes", wkbLineString, {"SPATIAL_INDEX=NO"}) {
+
         m_layer_way_one_node.add_field("way_id", OFTInteger, 10);
         m_layer_way_one_node.add_field("timestamp", OFTString, 20);
         m_layer_way_one_node.add_field("node_id", OFTReal, 12);
         m_layer_way_one_node.add_field("num_nodes", OFTInteger, 3);
+
         m_layer_way_duplicate_nodes.add_field("way_id", OFTInteger, 10);
         m_layer_way_duplicate_nodes.add_field("timestamp", OFTString, 20);
         m_layer_way_duplicate_nodes.add_field("node_id", OFTReal, 12);
+        m_layer_way_duplicate_nodes.add_field("closed", OFTInteger, 1);
 
         m_layer_way_intersection_points.add_field("way_id", OFTInteger, 10);
         m_layer_way_intersection_points.add_field("timestamp", OFTString, 20);
+        m_layer_way_intersection_points.add_field("closed", OFTInteger, 1);
         m_layer_way_intersection_lines.add_field("way_id", OFTInteger, 10);
         m_layer_way_intersection_lines.add_field("timestamp", OFTString, 20);
+        m_layer_way_intersection_lines.add_field("closed", OFTInteger, 1);
 
         m_layer_way_spike_points.add_field("way_id", OFTInteger, 10);
         m_layer_way_spike_points.add_field("timestamp", OFTString, 20);
@@ -298,10 +303,12 @@ public:
 
         m_layer_way_duplicate_segments.add_field("way_id", OFTInteger, 10);
         m_layer_way_duplicate_segments.add_field("timestamp", OFTString, 20);
+        m_layer_way_duplicate_segments.add_field("closed", OFTInteger, 1);
 
         m_layer_way_many_nodes.add_field("way_id", OFTInteger, 10);
         m_layer_way_many_nodes.add_field("timestamp", OFTString, 20);
         m_layer_way_many_nodes.add_field("num_nodes", OFTInteger, 4);
+        m_layer_way_many_nodes.add_field("closed", OFTInteger, 1);
 
         open_writer(m_writer_self_intersection, output_dirname, "way-self-intersection");
         open_writer(m_writer_spike, output_dirname, "way-spike");
@@ -360,6 +367,7 @@ public:
             feature.set_field("way_id", static_cast<int32_t>(way.id()));
             feature.set_field("node_id", static_cast<double>(way.nodes()[0].ref()));
             feature.set_field("timestamp", ts.c_str());
+            feature.set_field("closed", way.is_closed());
             feature.add_to_layer();
         }
 
@@ -391,6 +399,7 @@ public:
                     gdalcpp::Feature feature{m_layer_way_duplicate_segments, std::move(linestring)};
                     feature.set_field("way_id", static_cast<int32_t>(way.id()));
                     feature.set_field("timestamp", ts.c_str());
+                    feature.set_field("closed", way.is_closed());
                     feature.add_to_layer();
                 } else {
                     if (outside_x_range(s2, s1)) {
@@ -413,6 +422,7 @@ public:
                 gdalcpp::Feature feature{m_layer_way_intersection_points, m_factory.create_point(location)};
                 feature.set_field("way_id", static_cast<int32_t>(way.id()));
                 feature.set_field("timestamp", ts.c_str());
+                feature.set_field("closed", way.is_closed());
                 feature.add_to_layer();
             }
 
@@ -420,6 +430,7 @@ public:
                 gdalcpp::Feature feature{m_layer_way_intersection_lines, m_factory.create_linestring(way)};
                 feature.set_field("way_id", static_cast<int32_t>(way.id()));
                 feature.set_field("timestamp", ts.c_str());
+                feature.set_field("closed", way.is_closed());
                 feature.add_to_layer();
             }
         }
@@ -436,6 +447,7 @@ public:
             feature.set_field("way_id", static_cast<int32_t>(way.id()));
             feature.set_field("timestamp", ts.c_str());
             feature.set_field("num_nodes", static_cast<int32_t>(way.nodes().size()));
+            feature.set_field("closed", way.is_closed());
             feature.add_to_layer();
         }
     }
