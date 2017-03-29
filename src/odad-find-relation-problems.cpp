@@ -55,6 +55,7 @@ struct stats_type {
     uint64_t multipolygon_unknown_role = 0;
     uint64_t multipolygon_empty_role = 0;
     uint64_t multipolygon_area_tag = 0;
+    uint64_t multipolygon_boundary_tag = 0;
 };
 
 class CheckHandler : public osmium::handler::Handler {
@@ -68,6 +69,7 @@ class CheckHandler : public osmium::handler::Handler {
     osmium::io::Writer m_writer_multipolygon_unknown_role;
     osmium::io::Writer m_writer_multipolygon_empty_role;
     osmium::io::Writer m_writer_multipolygon_area_tag;
+    osmium::io::Writer m_writer_multipolygon_boundary_tag;
 
 public:
 
@@ -78,7 +80,8 @@ public:
         m_writer_multipolygon_non_way_member(directory + "/relation-multipolygon-non-way-member.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_unknown_role(directory + "/relation-multipolygon-unknown-role.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_empty_role(directory + "/relation-multipolygon-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_area_tag(directory + "/relation-multipolygon-area-tag.osm.pbf", header, osmium::io::overwrite::allow) {
+        m_writer_multipolygon_area_tag(directory + "/relation-multipolygon-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_boundary_tag(directory + "/relation-multipolygon-boundary-tag.osm.pbf", header, osmium::io::overwrite::allow) {
     }
 
     void multipolygon_relation(const osmium::Relation& relation) {
@@ -107,6 +110,12 @@ public:
         if (area) {
             ++m_stats.multipolygon_area_tag;
             m_writer_multipolygon_area_tag(relation);
+        }
+
+        const char* boundary = relation.tags().get_value_by_key("boundary");
+        if (boundary) {
+            ++m_stats.multipolygon_boundary_tag;
+            m_writer_multipolygon_boundary_tag(relation);
         }
     }
 
@@ -140,6 +149,7 @@ public:
         m_writer_multipolygon_unknown_role.close();
         m_writer_multipolygon_empty_role.close();
         m_writer_multipolygon_area_tag.close();
+        m_writer_multipolygon_boundary_tag.close();
     }
 
     const stats_type stats() const noexcept {
@@ -261,6 +271,7 @@ int main(int argc, char* argv[]) {
         add("multipolygon_unknown_role", handler.stats().multipolygon_unknown_role);
         add("multipolygon_empty_role", handler.stats().multipolygon_empty_role);
         add("multipolygon_area_tag", handler.stats().multipolygon_area_tag);
+        add("multipolygon_boundary_tag", handler.stats().multipolygon_boundary_tag);
     });
 
     osmium::MemoryUsage memory_usage;
