@@ -53,6 +53,7 @@ struct stats_type {
     uint64_t multipolygon_node_member = 0;
     uint64_t multipolygon_relation_member = 0;
     uint64_t multipolygon_unknown_role = 0;
+    uint64_t multipolygon_empty_role = 0;
 };
 
 class CheckHandler : public osmium::handler::Handler {
@@ -64,6 +65,7 @@ class CheckHandler : public osmium::handler::Handler {
     osmium::io::Writer m_writer_large_relations;
     osmium::io::Writer m_writer_multipolygon_non_way_member;
     osmium::io::Writer m_writer_multipolygon_unknown_role;
+    osmium::io::Writer m_writer_multipolygon_empty_role;
 
 public:
 
@@ -72,7 +74,31 @@ public:
         m_writer_no_member(directory + "/relation-no-member.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_large_relations(directory + "/large-relations.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_non_way_member(directory + "/relation-multipolygon-non-way-member.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_unknown_role(directory + "/relation-multipolygon-unknown-role.osm.pbf", header, osmium::io::overwrite::allow) {
+        m_writer_multipolygon_unknown_role(directory + "/relation-multipolygon-unknown-role.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_empty_role(directory + "/relation-multipolygon-empty-role.osm.pbf", header, osmium::io::overwrite::allow) {
+    }
+
+    void multipolygon_relation(const osmium::Relation& relation) {
+        for (const auto& member : relation.members()) {
+            if (member.type() != osmium::item_type::way) {
+                if (member.type() == osmium::item_type::node) {
+                    ++m_stats.multipolygon_node_member;
+                } else {
+                    ++m_stats.multipolygon_relation_member;
+                }
+                m_writer_multipolygon_non_way_member(relation);
+            }
+            if (std::strcmp(member.role(), "inner") &&
+                std::strcmp(member.role(), "outer") &&
+                std::strcmp(member.role(), "")) {
+                ++m_stats.multipolygon_unknown_role;
+                m_writer_multipolygon_unknown_role(relation);
+            }
+            if (member.role()[0] == '\0') {
+                ++m_stats.multipolygon_empty_role;
+                m_writer_multipolygon_empty_role(relation);
+            }
+        }
     }
 
     void relation(const osmium::Relation& relation) {
@@ -94,22 +120,7 @@ public:
 
         const char* type = relation.tags().get_value_by_key("type");
         if (type && !std::strcmp(type, "multipolygon")) {
-            for (const auto& member : relation.members()) {
-                if (member.type() != osmium::item_type::way) {
-                    if (member.type() == osmium::item_type::node) {
-                        ++m_stats.multipolygon_node_member;
-                    } else {
-                        ++m_stats.multipolygon_relation_member;
-                    }
-                    m_writer_multipolygon_non_way_member(relation);
-                }
-                if (std::strcmp(member.role(), "inner") &&
-                    std::strcmp(member.role(), "outer") &&
-                    std::strcmp(member.role(), "")) {
-                    ++m_stats.multipolygon_unknown_role;
-                    m_writer_multipolygon_unknown_role(relation);
-                }
-            }
+            multipolygon_relation(relation);
         }
     }
 
@@ -118,6 +129,7 @@ public:
         m_writer_large_relations.close();
         m_writer_multipolygon_non_way_member.close();
         m_writer_multipolygon_unknown_role.close();
+        m_writer_multipolygon_empty_role.close();
     }
 
     const stats_type stats() const noexcept {
@@ -237,6 +249,7 @@ int main(int argc, char* argv[]) {
         add("multipolygon_node_member", handler.stats().multipolygon_node_member);
         add("multipolygon_relation_member", handler.stats().multipolygon_relation_member);
         add("multipolygon_unknown_role", handler.stats().multipolygon_unknown_role);
+        add("multipolygon_empty_role", handler.stats().multipolygon_empty_role);
     });
 
     osmium::MemoryUsage memory_usage;
