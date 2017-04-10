@@ -60,6 +60,7 @@ struct stats_type {
     uint64_t multipolygon_boundary_administrative_tag = 0;
     uint64_t multipolygon_old_style = 0;
     uint64_t multipolygon_single_way = 0;
+    uint64_t multipolygon_duplicate_way = 0;
 };
 
 struct MPFilter : public osmium::TagsFilter {
@@ -88,6 +89,18 @@ class CheckHandler : public osmium::handler::Handler {
     osmium::io::Writer m_writer_multipolygon_boundary_administrative_tag;
     osmium::io::Writer m_writer_multipolygon_old_style;
     osmium::io::Writer m_writer_multipolygon_single_way;
+    osmium::io::Writer m_writer_multipolygon_duplicate_way;
+
+    static bool find_duplicate_ways(const osmium::Relation& relation) {
+        std::vector<osmium::object_id_type> way_ids;
+        way_ids.reserve(relation.members().size());
+        for (const auto& member : relation.members()) {
+            way_ids.push_back(member.ref());
+        }
+        std::sort(way_ids.begin(), way_ids.end());
+        const auto it = std::adjacent_find(way_ids.begin(), way_ids.end());
+        return it != way_ids.end();
+    }
 
 public:
 
@@ -103,7 +116,8 @@ public:
         m_writer_multipolygon_area_tag(directory + "/relation-multipolygon-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_boundary_administrative_tag(directory + "/relation-multipolygon-boundary-administrative-tag.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_old_style(directory + "/relation-multipolygon-old-style.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_single_way(directory + "/relation-multipolygon-single-way.osm.pbf", header, osmium::io::overwrite::allow) {
+        m_writer_multipolygon_single_way(directory + "/relation-multipolygon-single-way.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_duplicate_way(directory + "/relation-multipolygon-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow) {
     }
 
     void multipolygon_relation(const osmium::Relation& relation) {
@@ -147,6 +161,11 @@ public:
         if (relation.members().size() == 1 && relation.members().cbegin()->type() == osmium::item_type::way) {
             ++m_stats.multipolygon_single_way;
             m_writer_multipolygon_single_way(relation);
+        }
+
+        if (find_duplicate_ways(relation)) {
+            ++m_stats.multipolygon_duplicate_way;
+            m_writer_multipolygon_duplicate_way(relation);
         }
 
         if (relation.tags().size() == 1 || std::none_of(relation.tags().cbegin(), relation.tags().cend(), std::cref(m_mp_filter))) {
@@ -201,6 +220,7 @@ public:
         m_writer_multipolygon_boundary_administrative_tag.close();
         m_writer_multipolygon_old_style.close();
         m_writer_multipolygon_single_way.close();
+        m_writer_multipolygon_duplicate_way.close();
     }
 
     const stats_type stats() const noexcept {
@@ -325,6 +345,7 @@ int main(int argc, char* argv[]) {
         add("multipolygon_boundary_administrative_tag", handler.stats().multipolygon_boundary_administrative_tag);
         add("multipolygon_old_style", handler.stats().multipolygon_old_style);
         add("multipolygon_single_way", handler.stats().multipolygon_single_way);
+        add("multipolygon_duplicate_way", handler.stats().multipolygon_duplicate_way);
     });
 
     osmium::MemoryUsage memory_usage;
