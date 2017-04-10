@@ -62,6 +62,10 @@ struct stats_type {
     uint64_t multipolygon_old_style = 0;
     uint64_t multipolygon_single_way = 0;
     uint64_t multipolygon_duplicate_way = 0;
+    uint64_t boundary_empty_role = 0;
+    uint64_t boundary_duplicate_way = 0;
+    uint64_t boundary_area_tag = 0;
+    uint64_t boundary_no_boundary_tag = 0;
 };
 
 struct MPFilter : public osmium::TagsFilter {
@@ -92,12 +96,18 @@ class CheckHandler : public osmium::handler::Handler {
     osmium::io::Writer m_writer_multipolygon_old_style;
     osmium::io::Writer m_writer_multipolygon_single_way;
     osmium::io::Writer m_writer_multipolygon_duplicate_way;
+    osmium::io::Writer m_writer_boundary_empty_role;
+    osmium::io::Writer m_writer_boundary_duplicate_way;
+    osmium::io::Writer m_writer_boundary_area_tag;
+    osmium::io::Writer m_writer_boundary_no_boundary_tag;
 
     static bool find_duplicate_ways(const osmium::Relation& relation) {
         std::vector<osmium::object_id_type> way_ids;
         way_ids.reserve(relation.members().size());
         for (const auto& member : relation.members()) {
-            way_ids.push_back(member.ref());
+            if (member.type() == osmium::item_type::way) {
+                way_ids.push_back(member.ref());
+            }
         }
         std::sort(way_ids.begin(), way_ids.end());
         const auto it = std::adjacent_find(way_ids.begin(), way_ids.end());
@@ -120,7 +130,11 @@ public:
         m_writer_multipolygon_boundary_administrative_tag(directory + "/relation-multipolygon-boundary-administrative-tag.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_old_style(directory + "/relation-multipolygon-old-style.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_single_way(directory + "/relation-multipolygon-single-way.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_duplicate_way(directory + "/relation-multipolygon-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow) {
+        m_writer_multipolygon_duplicate_way(directory + "/relation-multipolygon-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_boundary_empty_role(directory + "/relation-boundary-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_boundary_duplicate_way(directory + "/relation-boundary-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_boundary_area_tag(directory + "/relation-boundary-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_boundary_no_boundary_tag(directory + "/relation-boundary-no-boundary-tag.osm.pbf", header, osmium::io::overwrite::allow) {
     }
 
     void multipolygon_relation(const osmium::Relation& relation) {
@@ -190,6 +204,37 @@ public:
         }
     }
 
+    void boundary_relation(const osmium::Relation& relation) {
+        uint64_t empty_role = 0;
+        for (const auto& member : relation.members()) {
+            if (member.role()[0] == '\0') {
+                ++empty_role;
+            }
+        }
+        if (empty_role) {
+            m_stats.boundary_empty_role += empty_role;
+            m_writer_boundary_empty_role(relation);
+        }
+
+        if (find_duplicate_ways(relation)) {
+            ++m_stats.boundary_duplicate_way;
+            m_writer_boundary_duplicate_way(relation);
+        }
+
+        const char* area = relation.tags().get_value_by_key("area");
+        if (area) {
+            ++m_stats.boundary_area_tag;
+            m_writer_boundary_area_tag(relation);
+        }
+
+        // is boundary:historic or historic:boundary also okay?
+        const char* boundary = relation.tags().get_value_by_key("boundary");
+        if (!boundary) {
+            ++m_stats.boundary_no_boundary_tag;
+            m_writer_boundary_no_boundary_tag(relation);
+        }
+    }
+
     void relation(const osmium::Relation& relation) {
         if (relation.timestamp() >= m_options.before_time) {
             return;
@@ -217,6 +262,10 @@ public:
         if (!std::strcmp(type, "multipolygon")) {
             multipolygon_relation(relation);
         }
+
+        if (!std::strcmp(type, "boundary")) {
+            boundary_relation(relation);
+        }
     }
 
     void close() {
@@ -231,6 +280,10 @@ public:
         m_writer_multipolygon_old_style.close();
         m_writer_multipolygon_single_way.close();
         m_writer_multipolygon_duplicate_way.close();
+        m_writer_boundary_empty_role.close();
+        m_writer_boundary_duplicate_way.close();
+        m_writer_boundary_area_tag.close();
+        m_writer_boundary_no_boundary_tag.close();
     }
 
     const stats_type stats() const noexcept {
