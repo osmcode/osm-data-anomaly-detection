@@ -52,6 +52,7 @@ struct stats_type {
     uint64_t relation_members = 0;
     uint64_t no_members = 0;
     uint64_t large_relations = 0;
+    uint64_t relations_without_type = 0;
     uint64_t multipolygon_node_member = 0;
     uint64_t multipolygon_relation_member = 0;
     uint64_t multipolygon_unknown_role = 0;
@@ -82,6 +83,7 @@ class CheckHandler : public osmium::handler::Handler {
 
     osmium::io::Writer m_writer_no_member;
     osmium::io::Writer m_writer_large_relations;
+    osmium::io::Writer m_writer_relations_without_type;
     osmium::io::Writer m_writer_multipolygon_non_way_member;
     osmium::io::Writer m_writer_multipolygon_unknown_role;
     osmium::io::Writer m_writer_multipolygon_empty_role;
@@ -110,6 +112,7 @@ public:
         m_mp_filter(),
         m_writer_no_member(directory + "/relation-no-member.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_large_relations(directory + "/large-relations.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_relations_without_type(directory + "/relations-without-type.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_non_way_member(directory + "/relation-multipolygon-non-way-member.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_unknown_role(directory + "/relation-multipolygon-unknown-role.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_empty_role(directory + "/relation-multipolygon-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
@@ -205,7 +208,13 @@ public:
         }
 
         const char* type = relation.tags().get_value_by_key("type");
-        if (type && !std::strcmp(type, "multipolygon")) {
+        if (!type) {
+            ++m_stats.relations_without_type;
+            m_writer_relations_without_type(relation);
+            return;
+        }
+
+        if (!std::strcmp(type, "multipolygon")) {
             multipolygon_relation(relation);
         }
     }
@@ -213,6 +222,7 @@ public:
     void close() {
         m_writer_no_member.close();
         m_writer_large_relations.close();
+        m_writer_relations_without_type.close();
         m_writer_multipolygon_non_way_member.close();
         m_writer_multipolygon_unknown_role.close();
         m_writer_multipolygon_empty_role.close();
@@ -337,6 +347,7 @@ int main(int argc, char* argv[]) {
         add("relation_members", handler.stats().relation_members);
         add("no_members", handler.stats().no_members);
         add("large_relations", handler.stats().large_relations);
+        add("relations_without_type", handler.stats().relations_without_type);
         add("multipolygon_node_member", handler.stats().multipolygon_node_member);
         add("multipolygon_relation_member", handler.stats().multipolygon_relation_member);
         add("multipolygon_unknown_role", handler.stats().multipolygon_unknown_role);
