@@ -410,6 +410,10 @@ int main(int argc, char* argv[]) {
         add("multipolygon_old_style", handler.stats().multipolygon_old_style);
         add("multipolygon_single_way", handler.stats().multipolygon_single_way);
         add("multipolygon_duplicate_way", handler.stats().multipolygon_duplicate_way);
+        add("boundary_empty_role", handler.stats().boundary_empty_role);
+        add("boundary_duplicate_way", handler.stats().boundary_duplicate_way);
+        add("boundary_area_tag", handler.stats().boundary_area_tag);
+        add("boundary_no_boundary_tag", handler.stats().boundary_no_boundary_tag);
     });
 
     osmium::MemoryUsage memory_usage;
