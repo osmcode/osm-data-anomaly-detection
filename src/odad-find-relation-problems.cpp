@@ -51,6 +51,8 @@ struct options_type {
 struct stats_type {
     uint64_t relation_members = 0;
     uint64_t no_members = 0;
+    uint64_t no_tags = 0;
+    uint64_t only_type_tag = 0;
     uint64_t large_relations = 0;
     uint64_t relations_without_type = 0;
     uint64_t multipolygon_node_member = 0;
@@ -86,6 +88,8 @@ class CheckHandler : public osmium::handler::Handler {
     MPFilter m_mp_filter;
 
     osmium::io::Writer m_writer_no_member;
+    osmium::io::Writer m_writer_no_tag;
+    osmium::io::Writer m_writer_only_type_tag;
     osmium::io::Writer m_writer_large_relations;
     osmium::io::Writer m_writer_relations_without_type;
     osmium::io::Writer m_writer_multipolygon_non_way_member;
@@ -121,6 +125,8 @@ public:
         m_stats(),
         m_mp_filter(),
         m_writer_no_member(directory + "/relation-no-member.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_no_tag(directory + "/relation-no-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_only_type_tag(directory + "/relation-only-type-tag.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_large_relations(directory + "/large-relations.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_relations_without_type(directory + "/relations-without-type.osm.pbf", header, osmium::io::overwrite::allow),
         m_writer_multipolygon_non_way_member(directory + "/relation-multipolygon-non-way-member.osm.pbf", header, osmium::io::overwrite::allow),
@@ -245,6 +251,11 @@ public:
             m_writer_no_member(relation);
         }
 
+        if (relation.tags().empty()) {
+            ++m_stats.no_tags;
+            m_writer_no_tag(relation);
+        }
+
         m_stats.relation_members += relation.members().size();
 
         if (relation.members().size() >= min_members_of_large_relations) {
@@ -259,6 +270,11 @@ public:
             return;
         }
 
+        if (relation.tags().size() == 1) {
+            ++m_stats.only_type_tag;
+            m_writer_only_type_tag(relation);
+        }
+
         if (!std::strcmp(type, "multipolygon")) {
             multipolygon_relation(relation);
         }
@@ -270,6 +286,8 @@ public:
 
     void close() {
         m_writer_no_member.close();
+        m_writer_no_tag.close();
+        m_writer_only_type_tag.close();
         m_writer_large_relations.close();
         m_writer_relations_without_type.close();
         m_writer_multipolygon_non_way_member.close();
@@ -399,6 +417,8 @@ int main(int argc, char* argv[]) {
     write_stats(output_dirname + "/stats-relation-problems.db", last_time, [&](std::function<void(const char*, uint64_t)>& add){
         add("relation_members", handler.stats().relation_members);
         add("no_members", handler.stats().no_members);
+        add("no_tags", handler.stats().no_tags);
+        add("only_type_tags", handler.stats().no_tags);
         add("large_relations", handler.stats().large_relations);
         add("relations_without_type", handler.stats().relations_without_type);
         add("multipolygon_node_member", handler.stats().multipolygon_node_member);
