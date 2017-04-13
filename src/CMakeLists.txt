@@ -15,7 +15,7 @@ target_link_libraries(odad-find-orphans ${OSMIUM_LIBRARIES} sqlite3)
 install(TARGETS odad-find-orphans DESTINATION bin)
 
 add_executable(odad-find-relation-problems odad-find-relation-problems.cpp)
-target_link_libraries(odad-find-relation-problems ${OSMIUM_IO_LIBRARIES} sqlite3)
+target_link_libraries(odad-find-relation-problems ${OSMIUM_LIBRARIES} sqlite3)
 install(TARGETS odad-find-relation-problems DESTINATION bin)
 
 add_executable(odad-find-unusual-tags odad-find-unusual-tags.cpp)
