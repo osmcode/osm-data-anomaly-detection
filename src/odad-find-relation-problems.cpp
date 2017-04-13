@@ -27,6 +27,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <iostream>
 #include <string>
 
+#include <osmium/index/id_set.hpp>
+#include <osmium/index/nwr_array.hpp>
 #include <osmium/io/any_input.hpp>
 #include <osmium/io/any_output.hpp>
 #include <osmium/io/file.hpp>
@@ -51,10 +53,10 @@ struct options_type {
 struct stats_type {
     uint64_t relation_members = 0;
     uint64_t no_members = 0;
-    uint64_t no_tags = 0;
+    uint64_t no_tag = 0;
     uint64_t only_type_tag = 0;
-    uint64_t large_relations = 0;
-    uint64_t relations_without_type = 0;
+    uint64_t no_type_tag = 0;
+    uint64_t large = 0;
     uint64_t multipolygon_node_member = 0;
     uint64_t multipolygon_relation_member = 0;
     uint64_t multipolygon_unknown_role = 0;
@@ -68,6 +70,15 @@ struct stats_type {
     uint64_t boundary_duplicate_way = 0;
     uint64_t boundary_area_tag = 0;
     uint64_t boundary_no_boundary_tag = 0;
+};
+
+using id_set_type = osmium::index::IdSetSmall<osmium::unsigned_object_id_type>;
+using id_indexes = osmium::nwr_array<id_set_type>;
+
+struct indexes_type {
+    id_indexes no_tag;
+    id_indexes only_type_tag;
+    id_indexes no_type_tag;
 };
 
 struct MPFilter : public osmium::TagsFilter {
@@ -84,14 +95,15 @@ struct MPFilter : public osmium::TagsFilter {
 class CheckHandler : public osmium::handler::Handler {
 
     options_type m_options;
+    indexes_type& m_indexes;
     stats_type m_stats;
     MPFilter m_mp_filter;
 
     osmium::io::Writer m_writer_no_member;
     osmium::io::Writer m_writer_no_tag;
     osmium::io::Writer m_writer_only_type_tag;
-    osmium::io::Writer m_writer_large_relations;
-    osmium::io::Writer m_writer_relations_without_type;
+    osmium::io::Writer m_writer_no_type_tag;
+    osmium::io::Writer m_writer_large;
     osmium::io::Writer m_writer_multipolygon_non_way_member;
     osmium::io::Writer m_writer_multipolygon_unknown_role;
     osmium::io::Writer m_writer_multipolygon_empty_role;
@@ -118,29 +130,10 @@ class CheckHandler : public osmium::handler::Handler {
         return it != way_ids.end();
     }
 
-public:
-
-    CheckHandler(const std::string& directory, const options_type& options, const osmium::io::Header& header) :
-        m_options(options),
-        m_stats(),
-        m_mp_filter(),
-        m_writer_no_member(directory + "/relation-no-member.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_no_tag(directory + "/relation-no-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_only_type_tag(directory + "/relation-only-type-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_large_relations(directory + "/large-relations.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_relations_without_type(directory + "/relations-without-type.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_non_way_member(directory + "/relation-multipolygon-non-way-member.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_unknown_role(directory + "/relation-multipolygon-unknown-role.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_empty_role(directory + "/relation-multipolygon-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_area_tag(directory + "/relation-multipolygon-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_boundary_administrative_tag(directory + "/relation-multipolygon-boundary-administrative-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_old_style(directory + "/relation-multipolygon-old-style.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_single_way(directory + "/relation-multipolygon-single-way.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_duplicate_way(directory + "/relation-multipolygon-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_boundary_empty_role(directory + "/relation-boundary-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_boundary_duplicate_way(directory + "/relation-boundary-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_boundary_area_tag(directory + "/relation-boundary-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_boundary_no_boundary_tag(directory + "/relation-boundary-no-boundary-tag.osm.pbf", header, osmium::io::overwrite::allow) {
+    static void add_members_to_index(const osmium::Relation& relation, id_indexes& indexes) {
+        for (const auto& member : relation.members()) {
+            indexes(member.type()).set(member.positive_ref());
+        }
     }
 
     void multipolygon_relation(const osmium::Relation& relation) {
@@ -241,6 +234,32 @@ public:
         }
     }
 
+public:
+
+    CheckHandler(const std::string& directory, const options_type& options, indexes_type& indexes, const osmium::io::Header& header) :
+        m_options(options),
+        m_indexes(indexes),
+        m_stats(),
+        m_mp_filter(),
+        m_writer_no_member(directory + "/relation-no-member.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_no_tag(directory + "/relation-no-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_only_type_tag(directory + "/relation-only-type-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_no_type_tag(directory + "/relation-no-type-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_large(directory + "/relation-large.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_non_way_member(directory + "/relation-multipolygon-non-way-member.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_unknown_role(directory + "/relation-multipolygon-unknown-role.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_empty_role(directory + "/relation-multipolygon-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_area_tag(directory + "/relation-multipolygon-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_boundary_administrative_tag(directory + "/relation-multipolygon-boundary-administrative-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_old_style(directory + "/relation-multipolygon-old-style.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_single_way(directory + "/relation-multipolygon-single-way.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_multipolygon_duplicate_way(directory + "/relation-multipolygon-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_boundary_empty_role(directory + "/relation-boundary-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_boundary_duplicate_way(directory + "/relation-boundary-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_boundary_area_tag(directory + "/relation-boundary-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_boundary_no_boundary_tag(directory + "/relation-boundary-no-boundary-tag.osm.pbf", header, osmium::io::overwrite::allow) {
+    }
+
     void relation(const osmium::Relation& relation) {
         if (relation.timestamp() >= m_options.before_time) {
             return;
@@ -252,27 +271,35 @@ public:
         }
 
         if (relation.tags().empty()) {
-            ++m_stats.no_tags;
+            ++m_stats.no_tag;
             m_writer_no_tag(relation);
+            m_indexes.no_tag(osmium::item_type::relation).set(relation.positive_id());
+            add_members_to_index(relation, m_indexes.no_tag);
         }
 
         m_stats.relation_members += relation.members().size();
 
         if (relation.members().size() >= min_members_of_large_relations) {
-            ++m_stats.large_relations;
-            m_writer_large_relations(relation);
+            ++m_stats.large;
+            m_writer_large(relation);
         }
 
         const char* type = relation.tags().get_value_by_key("type");
         if (!type) {
-            ++m_stats.relations_without_type;
-            m_writer_relations_without_type(relation);
+            if (!relation.tags().empty()) {
+                ++m_stats.no_type_tag;
+                m_writer_no_type_tag(relation);
+                m_indexes.no_type_tag(osmium::item_type::relation).set(relation.positive_id());
+                add_members_to_index(relation, m_indexes.no_type_tag);
+            }
             return;
         }
 
         if (relation.tags().size() == 1) {
             ++m_stats.only_type_tag;
             m_writer_only_type_tag(relation);
+            m_indexes.only_type_tag(osmium::item_type::relation).set(relation.positive_id());
+            add_members_to_index(relation, m_indexes.only_type_tag);
         }
 
         if (!std::strcmp(type, "multipolygon")) {
@@ -288,8 +315,8 @@ public:
         m_writer_no_member.close();
         m_writer_no_tag.close();
         m_writer_only_type_tag.close();
-        m_writer_large_relations.close();
-        m_writer_relations_without_type.close();
+        m_writer_no_type_tag.close();
+        m_writer_large.close();
         m_writer_multipolygon_non_way_member.close();
         m_writer_multipolygon_unknown_role.close();
         m_writer_multipolygon_empty_role.close();
@@ -375,6 +402,53 @@ static options_type parse_command_line(int argc, char* argv[]) {
     return options;
 }
 
+static void sort_indexes(id_indexes& indexes) {
+    indexes(osmium::item_type::node).sort_unique();
+    indexes(osmium::item_type::way).sort_unique();
+    indexes(osmium::item_type::relation).sort_unique();
+}
+
+static std::unique_ptr<osmium::io::Writer> create_writer(const std::string& directory, const osmium::io::Header& header, const std::string& name) {
+    osmium::io::File file{directory + "/" + name + ".osm.pbf"};
+    file.set("locations_on_ways");
+    return std::unique_ptr<osmium::io::Writer>(new osmium::io::Writer{file, header, osmium::io::overwrite::allow});
+}
+
+static void write_results(const std::string& input_filename, const std::string& directory, const indexes_type& indexes, const osmium::io::Header& header) {
+    auto writer_no_tag        = create_writer(directory, header, "relation-no-tag-all");
+    auto writer_only_type_tag = create_writer(directory, header, "relation-only-type-tag-all");
+    auto writer_no_type_tag   = create_writer(directory, header, "relation-no-type-tag-all");
+
+    osmium::io::Reader reader{input_filename};
+    osmium::ProgressBar progress_bar{reader.file_size(), display_progress()};
+
+    while (osmium::memory::Buffer buffer = reader.read()) {
+        progress_bar.update(reader.offset());
+        for (const auto& object : buffer.select<osmium::OSMObject>()) {
+
+            if (indexes.no_tag(object.type()).get_binary_search(object.positive_id())) {
+                (*writer_no_tag)(object);
+            }
+
+            if (indexes.only_type_tag(object.type()).get_binary_search(object.positive_id())) {
+                (*writer_only_type_tag)(object);
+            }
+
+            if (indexes.no_type_tag(object.type()).get_binary_search(object.positive_id())) {
+                (*writer_no_type_tag)(object);
+            }
+
+        }
+    }
+
+    progress_bar.done();
+    reader.close();
+
+    writer_no_tag->close();
+    writer_only_type_tag->close();
+    writer_no_type_tag->close();
+}
+
 int main(int argc, char* argv[]) {
     const auto options = parse_command_line(argc, argv);
 
@@ -398,8 +472,9 @@ int main(int argc, char* argv[]) {
     osmium::io::Header header;
     header.set("generator", program_name);
 
+    indexes_type indexes;
     LastTimestampHandler last_timestamp_handler;
-    CheckHandler handler{output_dirname, options, header};
+    CheckHandler handler{output_dirname, options, indexes, header};
 
     vout << "Reading relations and checking for problems...\n";
     osmium::ProgressBar progress_bar{reader.file_size(), display_progress()};
@@ -408,19 +483,26 @@ int main(int argc, char* argv[]) {
         osmium::apply(buffer, last_timestamp_handler, handler);
     }
     progress_bar.done();
-
     handler.close();
     reader.close();
+
+    vout << "Sorting ID indexes...\n";
+    sort_indexes(indexes.no_tag);
+    sort_indexes(indexes.only_type_tag);
+    sort_indexes(indexes.no_type_tag);
+
+    vout << "Writing out data files...\n";
+    write_results(input_filename, output_dirname, indexes, header);
 
     vout << "Writing out stats...\n";
     const auto last_time{last_timestamp_handler.get_timestamp()};
     write_stats(output_dirname + "/stats-relation-problems.db", last_time, [&](std::function<void(const char*, uint64_t)>& add){
-        add("relation_members", handler.stats().relation_members);
-        add("no_members", handler.stats().no_members);
-        add("no_tags", handler.stats().no_tags);
-        add("only_type_tags", handler.stats().no_tags);
-        add("large_relations", handler.stats().large_relations);
-        add("relations_without_type", handler.stats().relations_without_type);
+        add("relation_member_count", handler.stats().relation_members);
+        add("relation_no_members", handler.stats().no_members);
+        add("relation_no_tag", handler.stats().no_tag);
+        add("relation_only_type_tag", handler.stats().only_type_tag);
+        add("relation_no_type_tag", handler.stats().no_type_tag);
+        add("relation_large", handler.stats().large);
         add("multipolygon_node_member", handler.stats().multipolygon_node_member);
         add("multipolygon_relation_member", handler.stats().multipolygon_relation_member);
         add("multipolygon_unknown_role", handler.stats().multipolygon_unknown_role);
