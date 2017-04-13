@@ -270,13 +270,6 @@ public:
             m_writer_no_member(relation);
         }
 
-        if (relation.tags().empty()) {
-            ++m_stats.no_tag;
-            m_writer_no_tag(relation);
-            m_indexes.no_tag(osmium::item_type::relation).set(relation.positive_id());
-            add_members_to_index(relation, m_indexes.no_tag);
-        }
-
         m_stats.relation_members += relation.members().size();
 
         if (relation.members().size() >= min_members_of_large_relations) {
@@ -284,14 +277,20 @@ public:
             m_writer_large(relation);
         }
 
+        if (relation.tags().empty()) {
+            ++m_stats.no_tag;
+            m_writer_no_tag(relation);
+            m_indexes.no_tag(osmium::item_type::relation).set(relation.positive_id());
+            add_members_to_index(relation, m_indexes.no_tag);
+            return;
+        }
+
         const char* type = relation.tags().get_value_by_key("type");
         if (!type) {
-            if (!relation.tags().empty()) {
-                ++m_stats.no_type_tag;
-                m_writer_no_type_tag(relation);
-                m_indexes.no_type_tag(osmium::item_type::relation).set(relation.positive_id());
-                add_members_to_index(relation, m_indexes.no_type_tag);
-            }
+            ++m_stats.no_type_tag;
+            m_writer_no_type_tag(relation);
+            m_indexes.no_type_tag(osmium::item_type::relation).set(relation.positive_id());
+            add_members_to_index(relation, m_indexes.no_type_tag);
             return;
         }
 
@@ -304,9 +303,7 @@ public:
 
         if (!std::strcmp(type, "multipolygon")) {
             multipolygon_relation(relation);
-        }
-
-        if (!std::strcmp(type, "boundary")) {
+        } else if (!std::strcmp(type, "boundary")) {
             boundary_relation(relation);
         }
     }
