@@ -60,7 +60,7 @@ struct stats_type {
 
 class Output {
 
-    using id_map_type = std::map<osmium::unsigned_object_id_type, osmium::unsigned_object_id_type>;
+    using id_map_type = std::vector<std::pair<osmium::unsigned_object_id_type, osmium::unsigned_object_id_type>>;
 
     std::string m_name;
     std::map<osmium::unsigned_object_id_type, std::vector<osmium::unsigned_object_id_type>> m_marks;
@@ -128,7 +128,7 @@ class Output {
 
     void add_members_to_index(const osmium::Relation& relation) {
         for (const auto& member : relation.members()) {
-            m_id_maps(member.type()).emplace(member.positive_ref(), relation.positive_id());
+            m_id_maps(member.type()).emplace_back(member.positive_ref(), relation.positive_id());
         }
     }
 
@@ -178,12 +178,23 @@ public:
         }
     }
 
+    using id_pair = std::pair<osmium::unsigned_object_id_type, osmium::unsigned_object_id_type>;
+
     void write_to_all(const osmium::OSMObject& object) {
-        const auto range = m_id_maps(object.type()).equal_range(object.positive_id());
+        const auto& map = m_id_maps(object.type());
+        const auto range = std::equal_range(map.begin(), map.end(), std::make_pair(object.positive_id(), 0ul), [](const id_pair& a, const id_pair& b){
+            return a.first < b.first;
+        });
         if (range.first != range.second) {
             m_writer_all(object);
             add_layers(object, range);
         }
+    }
+
+    void prepare() {
+        std::sort(m_id_maps(osmium::item_type::node).begin(), m_id_maps(osmium::item_type::node).end());
+        std::sort(m_id_maps(osmium::item_type::way).begin(), m_id_maps(osmium::item_type::way).end());
+        std::sort(m_id_maps(osmium::item_type::relation).begin(), m_id_maps(osmium::item_type::relation).end());
     }
 
     void close_writer_rel() {
@@ -572,6 +583,10 @@ int main(int argc, char* argv[]) {
     }
     progress_bar.done();
     reader.close();
+
+    outputs.for_all([&](Output& output){
+        output.prepare();
+    });
 
     vout << "Writing out data files...\n";
     write_data_files(input_filename, outputs);
