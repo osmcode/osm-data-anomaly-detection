@@ -26,6 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <getopt.h>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include <osmium/geom/ogr.hpp>
 #include <osmium/index/id_set.hpp>
@@ -55,40 +56,185 @@ struct options_type {
 
 struct stats_type {
     uint64_t relation_members = 0;
-    uint64_t no_members = 0;
-    uint64_t no_tag = 0;
-    uint64_t only_type_tag = 0;
-    uint64_t no_type_tag = 0;
-    uint64_t large = 0;
-    uint64_t multipolygon_node_member = 0;
-    uint64_t multipolygon_relation_member = 0;
-    uint64_t multipolygon_unknown_role = 0;
-    uint64_t multipolygon_empty_role = 0;
-    uint64_t multipolygon_area_tag = 0;
-    uint64_t multipolygon_boundary_administrative_tag = 0;
-    uint64_t multipolygon_old_style = 0;
-    uint64_t multipolygon_single_way = 0;
-    uint64_t multipolygon_duplicate_way = 0;
-    uint64_t boundary_empty_role = 0;
-    uint64_t boundary_duplicate_way = 0;
-    uint64_t boundary_area_tag = 0;
-    uint64_t boundary_no_boundary_tag = 0;
 };
 
-using id_map_type = std::map<osmium::unsigned_object_id_type, osmium::unsigned_object_id_type>;
-using id_maps = osmium::nwr_array<id_map_type>;
-using id_set_type = osmium::index::IdSetSmall<osmium::unsigned_object_id_type>;
+class Output {
 
-struct indexes_type {
-    id_maps no_tag;
-    id_set_type no_tag_rels;
+    using id_map_type = std::map<osmium::unsigned_object_id_type, osmium::unsigned_object_id_type>;
 
-    id_maps only_type_tag;
-    id_set_type only_type_tag_rels;
+    std::string m_name;
+    std::map<osmium::unsigned_object_id_type, std::vector<osmium::unsigned_object_id_type>> m_marks;
+    osmium::geom::OGRFactory<>& m_factory;
+    std::unique_ptr<gdalcpp::Layer> m_layer_points;
+    std::unique_ptr<gdalcpp::Layer> m_layer_lines;
 
-    id_maps no_type_tag;
-    id_set_type no_type_tag_rels;
-};
+    osmium::io::File m_file;
+    osmium::io::Writer m_writer_rel;
+    osmium::io::Writer m_writer_all;
+
+    uint64_t m_counter;
+
+    osmium::nwr_array<id_map_type> m_id_maps;
+
+    static std::string underscore_to_dash(const std::string& str) {
+        std::string out;
+
+        for (const char c : str) {
+            out += (c == '_') ? '-' : c;
+        }
+
+        return out;
+    }
+
+    bool check_mark(osmium::unsigned_object_id_type rel_id, osmium::unsigned_object_id_type obj_id) {
+        if (m_marks.count(rel_id) == 0) {
+            return false;
+        }
+        const auto& vec = m_marks[rel_id];
+        const auto range = std::equal_range(vec.begin(), vec.end(), obj_id);
+        return range.first != range.second;
+    }
+
+    void add_layers(const osmium::OSMObject& object, const std::pair<id_map_type::const_iterator, id_map_type::const_iterator>& range) {
+        const auto ts = object.timestamp().to_iso();
+
+        for (auto it = range.first; it != range.second; ++it) {
+            const auto rel_id = it->second;
+            if (object.type() == osmium::item_type::node && m_layer_points) {
+                try {
+                    gdalcpp::Feature feature{*m_layer_points, m_factory.create_point(static_cast<const osmium::Node&>(object))};
+                    feature.set_field("rel_id", static_cast<int32_t>(rel_id));
+                    feature.set_field("node_id", static_cast<double>(object.id()));
+                    feature.set_field("timestamp", ts.c_str());
+                    feature.set_field("mark", 0);
+                    feature.add_to_layer();
+                } catch (osmium::geometry_error&) {
+                    // ignore geometry errors
+                }
+            } else if (object.type() == osmium::item_type::way && m_layer_lines) {
+                try {
+                    gdalcpp::Feature feature{*m_layer_lines, m_factory.create_linestring(static_cast<const osmium::Way&>(object))};
+                    feature.set_field("rel_id", static_cast<int32_t>(rel_id));
+                    feature.set_field("way_id", static_cast<int32_t>(object.id()));
+                    feature.set_field("timestamp", ts.c_str());
+                    feature.set_field("mark", check_mark(rel_id, object.positive_id()));
+                    feature.add_to_layer();
+                } catch (osmium::geometry_error&) {
+                    // ignore geometry errors
+                }
+            }
+        }
+    }
+
+    void add_members_to_index(const osmium::Relation& relation) {
+        for (const auto& member : relation.members()) {
+            m_id_maps(member.type()).emplace(member.positive_ref(), relation.positive_id());
+        }
+    }
+
+public:
+
+    Output(const std::string& name, gdalcpp::Dataset& dataset, osmium::geom::OGRFactory<>& factory, const std::string& directory, const osmium::io::Header& header, bool points, bool lines) :
+        m_name(name),
+        m_factory(factory),
+        m_layer_points(nullptr),
+        m_layer_lines(nullptr),
+        m_file(directory + "/" + underscore_to_dash(name) + "-all.osm.pbf", "pbf,locations_on_ways=true"),
+        m_writer_rel(directory + "/" + underscore_to_dash(name) + ".osm.pbf", header, osmium::io::overwrite::allow),
+        m_writer_all(m_file, header, osmium::io::overwrite::allow),
+        m_counter(0),
+        m_id_maps() {
+        if (points) {
+            m_layer_points.reset(new gdalcpp::Layer{dataset, name + "_points", wkbPoint, {"SPATIAL_INDEX=NO"}});
+            m_layer_points->add_field("rel_id", OFTInteger, 10);
+            m_layer_points->add_field("node_id", OFTReal, 12);
+            m_layer_points->add_field("timestamp", OFTString, 20);
+            m_layer_points->add_field("mark", OFTInteger, 1);
+        }
+        if (lines) {
+            m_layer_lines.reset(new gdalcpp::Layer{dataset, name + "_lines", wkbLineString, {"SPATIAL_INDEX=NO"}});
+            m_layer_lines->add_field("rel_id", OFTInteger, 10);
+            m_layer_lines->add_field("way_id", OFTInteger, 10);
+            m_layer_lines->add_field("timestamp", OFTString, 20);
+            m_layer_lines->add_field("mark", OFTInteger, 1);
+        }
+    }
+
+    const char* name() const noexcept {
+        return m_name.c_str();
+    }
+
+    std::int64_t counter() const noexcept {
+        return m_counter;
+    }
+
+    void add(const osmium::Relation& relation, uint64_t increment = 1, const std::vector<osmium::unsigned_object_id_type>& marks = {}) {
+        m_counter += increment;
+        m_writer_rel(relation);
+        add_members_to_index(relation);
+        if (!marks.empty()) {
+            m_marks.emplace(relation.positive_id(), marks);
+            auto vec = m_marks[relation.positive_id()];
+        }
+    }
+
+    void write_to_all(const osmium::OSMObject& object) {
+        const auto range = m_id_maps(object.type()).equal_range(object.positive_id());
+        if (range.first != range.second) {
+            m_writer_all(object);
+            add_layers(object, range);
+        }
+    }
+
+    void close_writer_rel() {
+        m_writer_rel.close();
+    }
+
+    void close_writer_all() {
+        m_writer_all.close();
+    }
+
+}; // class Output
+
+class Outputs {
+
+    std::map<std::string, Output> m_outputs;
+    std::string m_dirname;
+    osmium::io::Header m_header;
+    osmium::geom::OGRFactory<> m_factory;
+    gdalcpp::Dataset m_dataset;
+
+public:
+
+    Outputs(const std::string& dirname, osmium::io::Header& header) :
+        m_outputs(),
+        m_dirname(dirname),
+        m_header(header),
+        m_factory(),
+        m_dataset("SQLite", dirname + "/geoms-relation-problems.db", gdalcpp::SRS{m_factory.proj_string()}, { "SPATIALITE=TRUE", "INIT_WITH_EPSG=NO" }) {
+        CPLSetConfigOption("OGR_SQLITE_SYNCHRONOUS", "OFF");
+        m_dataset.enable_auto_transactions();
+        m_dataset.exec("PRAGMA journal_mode = OFF;");
+    }
+
+    void add(const char* name, bool points = true, bool lines = true) {
+        m_outputs.emplace(std::piecewise_construct,
+                          std::forward_as_tuple(name),
+                          std::forward_as_tuple(name, m_dataset, m_factory, m_dirname, m_header, points, lines));
+    }
+
+    Output& operator[](const char* name) {
+        return m_outputs.at(name);
+    }
+
+    template <typename TFunc>
+    void for_all(TFunc&& func) {
+        for (auto& out : m_outputs) {
+            std::forward<TFunc>(func)(out.second);
+        }
+    }
+
+}; // class Outputs
 
 struct MPFilter : public osmium::TagsFilter {
 
@@ -103,112 +249,100 @@ struct MPFilter : public osmium::TagsFilter {
 
 class CheckHandler : public osmium::handler::Handler {
 
+    Outputs& m_outputs;
     options_type m_options;
-    indexes_type& m_indexes;
     stats_type m_stats;
     MPFilter m_mp_filter;
 
-    osmium::io::Writer m_writer_no_member;
-    osmium::io::Writer m_writer_no_tag;
-    osmium::io::Writer m_writer_only_type_tag;
-    osmium::io::Writer m_writer_no_type_tag;
-    osmium::io::Writer m_writer_large;
-    osmium::io::Writer m_writer_multipolygon_non_way_member;
-    osmium::io::Writer m_writer_multipolygon_unknown_role;
-    osmium::io::Writer m_writer_multipolygon_empty_role;
-    osmium::io::Writer m_writer_multipolygon_area_tag;
-    osmium::io::Writer m_writer_multipolygon_boundary_administrative_tag;
-    osmium::io::Writer m_writer_multipolygon_old_style;
-    osmium::io::Writer m_writer_multipolygon_single_way;
-    osmium::io::Writer m_writer_multipolygon_duplicate_way;
-    osmium::io::Writer m_writer_boundary_empty_role;
-    osmium::io::Writer m_writer_boundary_duplicate_way;
-    osmium::io::Writer m_writer_boundary_area_tag;
-    osmium::io::Writer m_writer_boundary_no_boundary_tag;
+    static std::vector<osmium::unsigned_object_id_type> find_duplicate_ways(const osmium::Relation& relation) {
+        std::vector<osmium::unsigned_object_id_type> duplicate_ids;
 
-    static bool find_duplicate_ways(const osmium::Relation& relation) {
-        std::vector<osmium::object_id_type> way_ids;
+        std::vector<osmium::unsigned_object_id_type> way_ids;
         way_ids.reserve(relation.members().size());
         for (const auto& member : relation.members()) {
             if (member.type() == osmium::item_type::way) {
-                way_ids.push_back(member.ref());
+                way_ids.push_back(member.positive_ref());
             }
         }
         std::sort(way_ids.begin(), way_ids.end());
-        const auto it = std::adjacent_find(way_ids.begin(), way_ids.end());
-        return it != way_ids.end();
-    }
 
-    static void add_members_to_index(const osmium::Relation& relation, id_maps& maps) {
-        for (const auto& member : relation.members()) {
-            maps(member.type()).insert(std::make_pair(member.positive_ref(), relation.positive_id()));
+        auto it = way_ids.begin();
+        while (it != way_ids.end()) {
+            it = std::adjacent_find(it, way_ids.end());
+            if (it != way_ids.end()) {
+                duplicate_ids.push_back(*it);
+                ++it;
+            }
         }
+
+        return duplicate_ids;
     }
 
     void multipolygon_relation(const osmium::Relation& relation) {
-        const auto non_way_member = m_stats.multipolygon_node_member + m_stats.multipolygon_relation_member;
-        const auto unknown_role = m_stats.multipolygon_unknown_role;
-        const auto empty_role = m_stats.multipolygon_empty_role;
+        std::uint64_t node_member = 0;
+        std::uint64_t relation_member = 0;
+        std::uint64_t unknown_role = 0;
+        std::uint64_t empty_role = 0;
 
         for (const auto& member : relation.members()) {
             switch (member.type()) {
                 case osmium::item_type::node:
-                    ++m_stats.multipolygon_node_member;
+                    ++node_member;
                     break;
                 case osmium::item_type::way:
                     if (member.role()[0] == '\0') {
-                        ++m_stats.multipolygon_empty_role;
+                        ++empty_role;
                     } else if (std::strcmp(member.role(), "inner") &&
                                std::strcmp(member.role(), "outer")) {
-                        ++m_stats.multipolygon_unknown_role;
+                        ++unknown_role;
                     }
                     break;
                 case osmium::item_type::relation:
-                    ++m_stats.multipolygon_relation_member;
+                    ++relation_member;
                     break;
                 default:
                     break;
             }
         }
 
-        if (non_way_member != m_stats.multipolygon_node_member + m_stats.multipolygon_relation_member) {
-            m_writer_multipolygon_non_way_member(relation);
+        if (node_member) {
+            m_outputs["multipolygon_node_member"].add(relation, node_member);
         }
 
-        if (unknown_role != m_stats.multipolygon_unknown_role) {
-            m_writer_multipolygon_unknown_role(relation);
+        if (relation_member) {
+            m_outputs["multipolygon_relation_member"].add(relation, relation_member);
         }
 
-        if (empty_role != m_stats.multipolygon_empty_role) {
-            m_writer_multipolygon_empty_role(relation);
+        if (unknown_role) {
+            m_outputs["multipolygon_unknown_role"].add(relation, unknown_role);
+        }
+
+        if (empty_role) {
+            m_outputs["multipolygon_empty_role"].add(relation, empty_role);
         }
 
         if (relation.members().size() == 1 && relation.members().cbegin()->type() == osmium::item_type::way) {
-            ++m_stats.multipolygon_single_way;
-            m_writer_multipolygon_single_way(relation);
+            m_outputs["multipolygon_single_way"].add(relation);
         }
 
-        if (find_duplicate_ways(relation)) {
-            ++m_stats.multipolygon_duplicate_way;
-            m_writer_multipolygon_duplicate_way(relation);
+        const auto duplicates = find_duplicate_ways(relation);
+        if (!duplicates.empty()) {
+            m_outputs["multipolygon_duplicate_way"].add(relation, 1, duplicates);
         }
 
         if (relation.tags().size() == 1 || std::none_of(relation.tags().cbegin(), relation.tags().cend(), std::cref(m_mp_filter))) {
-            ++m_stats.multipolygon_old_style;
-            m_writer_multipolygon_old_style(relation);
+            m_outputs["multipolygon_old_style"].add(relation);
             return;
         }
 
         const char* area = relation.tags().get_value_by_key("area");
         if (area) {
-            ++m_stats.multipolygon_area_tag;
-            m_writer_multipolygon_area_tag(relation);
+            m_outputs["multipolygon_area_tag"].add(relation);
         }
 
         const char* boundary = relation.tags().get_value_by_key("boundary");
         if (boundary && !std::strcmp(boundary, "administrative")) {
-            ++m_stats.multipolygon_boundary_administrative_tag;
-            m_writer_multipolygon_boundary_administrative_tag(relation);
+            m_outputs["multipolygon_boundary_administrative_tag"].add(relation);
         }
     }
 
@@ -220,53 +354,33 @@ class CheckHandler : public osmium::handler::Handler {
             }
         }
         if (empty_role) {
-            m_stats.boundary_empty_role += empty_role;
-            m_writer_boundary_empty_role(relation);
+            m_outputs["boundary_empty_role"].add(relation, empty_role);
         }
 
-        if (find_duplicate_ways(relation)) {
-            ++m_stats.boundary_duplicate_way;
-            m_writer_boundary_duplicate_way(relation);
+        const auto duplicates = find_duplicate_ways(relation);
+        if (!duplicates.empty()) {
+            m_outputs["boundary_duplicate_way"].add(relation, 1, duplicates);
         }
 
         const char* area = relation.tags().get_value_by_key("area");
         if (area) {
-            ++m_stats.boundary_area_tag;
-            m_writer_boundary_area_tag(relation);
+            m_outputs["boundary_area_tag"].add(relation);
         }
 
         // is boundary:historic or historic:boundary also okay?
         const char* boundary = relation.tags().get_value_by_key("boundary");
         if (!boundary) {
-            ++m_stats.boundary_no_boundary_tag;
-            m_writer_boundary_no_boundary_tag(relation);
+            m_outputs["boundary_no_boundary_tag"].add(relation);
         }
     }
 
 public:
 
-    CheckHandler(const std::string& directory, const options_type& options, indexes_type& indexes, const osmium::io::Header& header) :
+    CheckHandler(Outputs& outputs, const options_type& options) :
+        m_outputs(outputs),
         m_options(options),
-        m_indexes(indexes),
         m_stats(),
-        m_mp_filter(),
-        m_writer_no_member(directory + "/relation-no-member.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_no_tag(directory + "/relation-no-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_only_type_tag(directory + "/relation-only-type-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_no_type_tag(directory + "/relation-no-type-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_large(directory + "/relation-large.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_non_way_member(directory + "/relation-multipolygon-non-way-member.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_unknown_role(directory + "/relation-multipolygon-unknown-role.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_empty_role(directory + "/relation-multipolygon-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_area_tag(directory + "/relation-multipolygon-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_boundary_administrative_tag(directory + "/relation-multipolygon-boundary-administrative-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_old_style(directory + "/relation-multipolygon-old-style.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_single_way(directory + "/relation-multipolygon-single-way.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_multipolygon_duplicate_way(directory + "/relation-multipolygon-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_boundary_empty_role(directory + "/relation-boundary-empty-role.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_boundary_duplicate_way(directory + "/relation-boundary-duplicate-way.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_boundary_area_tag(directory + "/relation-boundary-area-tag.osm.pbf", header, osmium::io::overwrite::allow),
-        m_writer_boundary_no_boundary_tag(directory + "/relation-boundary-no-boundary-tag.osm.pbf", header, osmium::io::overwrite::allow) {
+        m_mp_filter() {
     }
 
     void relation(const osmium::Relation& relation) {
@@ -274,40 +388,29 @@ public:
             return;
         }
 
-        if (relation.members().empty()) {
-            ++m_stats.no_members;
-            m_writer_no_member(relation);
-        }
-
         m_stats.relation_members += relation.members().size();
 
+        if (relation.members().empty()) {
+            m_outputs["relation_no_members"].add(relation);
+        }
+
         if (relation.members().size() >= min_members_of_large_relations) {
-            ++m_stats.large;
-            m_writer_large(relation);
+            m_outputs["relation_large"].add(relation);
         }
 
         if (relation.tags().empty()) {
-            ++m_stats.no_tag;
-            m_writer_no_tag(relation);
-            m_indexes.no_tag_rels.set(relation.positive_id());
-            add_members_to_index(relation, m_indexes.no_tag);
+            m_outputs["relation_no_tag"].add(relation);
             return;
         }
 
         const char* type = relation.tags().get_value_by_key("type");
         if (!type) {
-            ++m_stats.no_type_tag;
-            m_writer_no_type_tag(relation);
-            m_indexes.no_type_tag_rels.set(relation.positive_id());
-            add_members_to_index(relation, m_indexes.no_type_tag);
+            m_outputs["relation_no_type_tag"].add(relation);
             return;
         }
 
         if (relation.tags().size() == 1) {
-            ++m_stats.only_type_tag;
-            m_writer_only_type_tag(relation);
-            m_indexes.only_type_tag_rels.set(relation.positive_id());
-            add_members_to_index(relation, m_indexes.only_type_tag);
+            m_outputs["relation_only_type_tag"].add(relation);
         }
 
         if (!std::strcmp(type, "multipolygon")) {
@@ -317,28 +420,14 @@ public:
         }
     }
 
-    void close() {
-        m_writer_no_member.close();
-        m_writer_no_tag.close();
-        m_writer_only_type_tag.close();
-        m_writer_no_type_tag.close();
-        m_writer_large.close();
-        m_writer_multipolygon_non_way_member.close();
-        m_writer_multipolygon_unknown_role.close();
-        m_writer_multipolygon_empty_role.close();
-        m_writer_multipolygon_area_tag.close();
-        m_writer_multipolygon_boundary_administrative_tag.close();
-        m_writer_multipolygon_old_style.close();
-        m_writer_multipolygon_single_way.close();
-        m_writer_multipolygon_duplicate_way.close();
-        m_writer_boundary_empty_role.close();
-        m_writer_boundary_duplicate_way.close();
-        m_writer_boundary_area_tag.close();
-        m_writer_boundary_no_boundary_tag.close();
-    }
-
     const stats_type stats() const noexcept {
         return m_stats;
+    }
+
+    void close() {
+        m_outputs.for_all([](Output& output) {
+            output.close_writer_rel();
+        });
     }
 
 }; // class CheckHandler
@@ -408,120 +497,25 @@ static options_type parse_command_line(int argc, char* argv[]) {
     return options;
 }
 
-class Output {
-
-    osmium::geom::OGRFactory<>& m_factory;
-    gdalcpp::Layer m_layer_points;
-    gdalcpp::Layer m_layer_lines;
-
-    osmium::io::File m_file;
-    osmium::io::Writer m_writer;
-
-    void add_layers(const osmium::OSMObject& object, const std::pair<id_map_type::const_iterator, id_map_type::const_iterator>& range) {
-        const auto ts = object.timestamp().to_iso();
-
-        for (auto it = range.first; it != range.second; ++it) {
-            const auto rel_id = it->second;
-            if (object.type() == osmium::item_type::node) {
-                try {
-                    gdalcpp::Feature feature{m_layer_points, m_factory.create_point(static_cast<const osmium::Node&>(object))};
-                    feature.set_field("rel_id", static_cast<int32_t>(rel_id));
-                    feature.set_field("node_id", static_cast<double>(object.id()));
-                    feature.set_field("timestamp", ts.c_str());
-                    feature.add_to_layer();
-                } catch (osmium::geometry_error&) {
-                    // ignore geometry errors
-                }
-            } else if (object.type() == osmium::item_type::way) {
-                try {
-                    gdalcpp::Feature feature{m_layer_lines, m_factory.create_linestring(static_cast<const osmium::Way&>(object))};
-                    feature.set_field("rel_id", static_cast<int32_t>(rel_id));
-                    feature.set_field("way_id", static_cast<int32_t>(object.id()));
-                    feature.set_field("timestamp", ts.c_str());
-                    feature.add_to_layer();
-                } catch (osmium::geometry_error&) {
-                    // ignore geometry errors
-                }
-            }
-        }
-    }
-
-    static std::string underscore_to_dash(const char* str) {
-        std::string out;
-
-        while (*str) {
-            if (*str == '_') {
-                out += '-';
-            } else {
-                out += *str;
-            }
-            ++str;
-        }
-
-        return out;
-    }
-
-public:
-
-    Output(const char* name, gdalcpp::Dataset& dataset, osmium::geom::OGRFactory<>& factory, const std::string& directory, const osmium::io::Header& header) :
-        m_factory(factory),
-        m_layer_points(dataset, std::string{"relation_"} + name + "_points", wkbPoint, {"SPATIAL_INDEX=NO"}),
-        m_layer_lines(dataset, std::string{"relation_"} + name + "_lines", wkbLineString, {"SPATIAL_INDEX=NO"}),
-        m_file(directory + "/relation-" + underscore_to_dash(name) + "-all.osm.pbf", "pbf,locations_on_ways=true"),
-        m_writer(m_file, header, osmium::io::overwrite::allow) {
-
-        m_layer_points.add_field("rel_id", OFTInteger, 10);
-        m_layer_points.add_field("node_id", OFTReal, 12);
-        m_layer_points.add_field("timestamp", OFTString, 20);
-
-        m_layer_lines.add_field("rel_id", OFTInteger, 10);
-        m_layer_lines.add_field("way_id", OFTInteger, 10);
-        m_layer_lines.add_field("timestamp", OFTString, 20);
-    }
-
-    void operator()(const osmium::OSMObject& object, const id_maps& index) {
-        const auto range = index(object.type()).equal_range(object.positive_id());
-        if (range.first != range.second) {
-            m_writer(object);
-            add_layers(object, range);
-        }
-    }
-
-    void close() {
-        m_writer.close();
-    }
-
-}; // class Output
-
-static void write_results(const std::string& input_filename, const std::string& directory, const indexes_type& indexes, const osmium::io::Header& header) {
-    osmium::geom::OGRFactory<> factory;
-    gdalcpp::Dataset dataset{"SQLite", directory + "/geoms-relation-problems.db", gdalcpp::SRS{factory.proj_string()}, { "SPATIALITE=TRUE", "INIT_WITH_EPSG=NO" }};
-    CPLSetConfigOption("OGR_SQLITE_SYNCHRONOUS", "OFF");
-    dataset.enable_auto_transactions();
-    dataset.exec("PRAGMA journal_mode = OFF;");
-
-    Output out_no_tag{"no_tag", dataset, factory, directory, header};
-    Output out_only_type_tag{"only_type_tag", dataset, factory, directory, header};
-    Output out_no_type_tag{"no_type_tag", dataset, factory, directory, header};
-
+static void write_data_files(const std::string& input_filename, Outputs& outputs) {
     osmium::io::Reader reader{input_filename};
     osmium::ProgressBar progress_bar{reader.file_size(), display_progress()};
 
     while (osmium::memory::Buffer buffer = reader.read()) {
         progress_bar.update(reader.offset());
         for (const auto& object : buffer.select<osmium::OSMObject>()) {
-            out_no_tag(object, indexes.no_tag);
-            out_only_type_tag(object, indexes.only_type_tag);
-            out_no_type_tag(object, indexes.no_type_tag);
+            outputs.for_all([&](Output& output) {
+                output.write_to_all(object);
+            });
         }
     }
 
     progress_bar.done();
     reader.close();
 
-    out_no_tag.close();
-    out_only_type_tag.close();
-    out_no_type_tag.close();
+    outputs.for_all([](Output& output) {
+        output.close_writer_all();
+    });
 }
 
 int main(int argc, char* argv[]) {
@@ -542,14 +536,33 @@ int main(int argc, char* argv[]) {
         vout << "  Get only objects last changed before: " << options.before_time << " (change with --age, -a or --before, -b)\n";
     }
 
-    osmium::io::Reader reader{input_filename, osmium::osm_entity_bits::relation};
-
     osmium::io::Header header;
     header.set("generator", program_name);
 
-    indexes_type indexes;
+    Outputs outputs{output_dirname, header};
+    outputs.add("relation_no_members", false, false);
+    outputs.add("relation_no_tag");
+    outputs.add("relation_only_type_tag");
+    outputs.add("relation_no_type_tag");
+    outputs.add("relation_large");
+    outputs.add("multipolygon_node_member", true, false);
+    outputs.add("multipolygon_relation_member", false, false);
+    outputs.add("multipolygon_unknown_role", false, true);
+    outputs.add("multipolygon_empty_role", false, true);
+    outputs.add("multipolygon_area_tag", false, true);
+    outputs.add("multipolygon_boundary_administrative_tag", false, true);
+    outputs.add("multipolygon_old_style", false, false);
+    outputs.add("multipolygon_single_way", false, true);
+    outputs.add("multipolygon_duplicate_way", false, true);
+    outputs.add("boundary_empty_role", false, true);
+    outputs.add("boundary_duplicate_way", false, true);
+    outputs.add("boundary_area_tag", false, true);
+    outputs.add("boundary_no_boundary_tag", false, true);
+
+    osmium::io::Reader reader{input_filename, osmium::osm_entity_bits::relation};
+
     LastTimestampHandler last_timestamp_handler;
-    CheckHandler handler{output_dirname, options, indexes, header};
+    CheckHandler handler{outputs, options};
 
     vout << "Reading relations and checking for problems...\n";
     osmium::ProgressBar progress_bar{reader.file_size(), display_progress()};
@@ -558,34 +571,18 @@ int main(int argc, char* argv[]) {
         osmium::apply(buffer, last_timestamp_handler, handler);
     }
     progress_bar.done();
-    handler.close();
     reader.close();
 
     vout << "Writing out data files...\n";
-    write_results(input_filename, output_dirname, indexes, header);
+    write_data_files(input_filename, outputs);
 
     vout << "Writing out stats...\n";
     const auto last_time{last_timestamp_handler.get_timestamp()};
     write_stats(output_dirname + "/stats-relation-problems.db", last_time, [&](std::function<void(const char*, uint64_t)>& add){
         add("relation_member_count", handler.stats().relation_members);
-        add("relation_no_members", handler.stats().no_members);
-        add("relation_no_tag", handler.stats().no_tag);
-        add("relation_only_type_tag", handler.stats().only_type_tag);
-        add("relation_no_type_tag", handler.stats().no_type_tag);
-        add("relation_large", handler.stats().large);
-        add("multipolygon_node_member", handler.stats().multipolygon_node_member);
-        add("multipolygon_relation_member", handler.stats().multipolygon_relation_member);
-        add("multipolygon_unknown_role", handler.stats().multipolygon_unknown_role);
-        add("multipolygon_empty_role", handler.stats().multipolygon_empty_role);
-        add("multipolygon_area_tag", handler.stats().multipolygon_area_tag);
-        add("multipolygon_boundary_administrative_tag", handler.stats().multipolygon_boundary_administrative_tag);
-        add("multipolygon_old_style", handler.stats().multipolygon_old_style);
-        add("multipolygon_single_way", handler.stats().multipolygon_single_way);
-        add("multipolygon_duplicate_way", handler.stats().multipolygon_duplicate_way);
-        add("boundary_empty_role", handler.stats().boundary_empty_role);
-        add("boundary_duplicate_way", handler.stats().boundary_duplicate_way);
-        add("boundary_area_tag", handler.stats().boundary_area_tag);
-        add("boundary_no_boundary_tag", handler.stats().boundary_no_boundary_tag);
+        outputs.for_all([&](Output& output){
+            add(output.name(), output.counter());
+        });
     });
 
     osmium::MemoryUsage memory_usage;
