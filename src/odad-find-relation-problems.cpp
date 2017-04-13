@@ -446,13 +446,28 @@ class Output {
         }
     }
 
+    static std::string underscore_to_dash(const char* str) {
+        std::string out;
+
+        while (*str) {
+            if (*str == '_') {
+                out += '-';
+            } else {
+                out += *str;
+            }
+            ++str;
+        }
+
+        return out;
+    }
+
 public:
 
     Output(const char* name, gdalcpp::Dataset& dataset, osmium::geom::OGRFactory<>& factory, const std::string& directory, const osmium::io::Header& header) :
         m_factory(factory),
         m_layer_points(dataset, std::string{"relation_"} + name + "_points", wkbPoint, {"SPATIAL_INDEX=NO"}),
         m_layer_lines(dataset, std::string{"relation_"} + name + "_lines", wkbLineString, {"SPATIAL_INDEX=NO"}),
-        m_file(directory + "/relation_" + name + "_all.osm.pbf", "pbf,locations_on_ways=true"),
+        m_file(directory + "/relation-" + underscore_to_dash(name) + "-all.osm.pbf", "pbf,locations_on_ways=true"),
         m_writer(m_file, header, osmium::io::overwrite::allow) {
 
         m_layer_points.add_field("rel_id", OFTInteger, 10);
