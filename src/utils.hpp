@@ -43,7 +43,7 @@ protected:
 
 public:
 
-    HandlerWithDB(const std::string& name) :
+    explicit HandlerWithDB(const std::string& name) :
         m_factory(),
         m_dataset("SQLite", name, gdalcpp::SRS{m_factory.proj_string()}, { "SPATIALITE=TRUE", "INIT_WITH_EPSG=NO" }) {
         CPLSetConfigOption("OGR_SQLITE_SYNCHRONOUS", "OFF");
