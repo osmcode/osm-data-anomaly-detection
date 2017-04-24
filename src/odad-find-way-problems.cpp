@@ -224,11 +224,12 @@ class CheckHandler : public HandlerWithDB {
             return false;
         }
 
-        auto first = way.nodes().cbegin() - 1;
-        auto prev = first + 1;
+        const auto first = way.nodes().cbegin();
+        const auto last = way.nodes().cend();
+
+        auto prev = first;
         auto curr = prev + 1;
         auto next = curr + 1;
-        auto last = way.nodes().cend();
 
         for (; next != last; ++prev, ++curr, ++next) {
             if (prev->location() == next->location()) {
@@ -242,14 +243,17 @@ class CheckHandler : public HandlerWithDB {
                     feature.add_to_layer();
                 }
 
-                auto p = prev - 1;
-                auto n = next + 1;
-                while (p != first && n != last && p->location() == n->location()) {
-                    prev = p;
-                    next = n;
-                    p = prev - 1;
-                    n = next + 1;
+                if (prev != first) {
+                    auto p = prev - 1;
+                    auto n = next + 1;
+                    while (p != first && n != last && p->location() == n->location()) {
+                        prev = p;
+                        next = n;
+                        --p;
+                        ++n;
+                    }
                 }
+
                 {
                     std::unique_ptr<OGRLineString> linestring{new OGRLineString};
                     for (; prev != next; ++prev) {
