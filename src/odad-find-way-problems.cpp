@@ -648,8 +648,9 @@ int main(int argc, char* argv[]) {
         vout << "  Get only objects last changed before: " << options.before_time << " (change with --age, -a or --before, -b)\n";
     }
 
-    osmium::io::Reader reader{input_filename, osmium::osm_entity_bits::way};
-    if (!has_locations_on_ways(reader.header())) {
+    osmium::io::File file{input_filename};
+    osmium::io::Reader reader{file, osmium::osm_entity_bits::way};
+    if (file.format() == osmium::io::file_format::pbf && !has_locations_on_ways(reader.header())) {
         std::cerr << "Input file must have locations on ways.\n";
         return 2;
     }
