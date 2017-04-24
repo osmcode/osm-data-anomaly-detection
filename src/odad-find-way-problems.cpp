@@ -54,12 +54,14 @@ struct options_type {
     osmium::Timestamp before_time{osmium::end_of_time()};
     bool verbose = true;
     size_t max_nodes = 1800;
+    double max_angle = 0.03;
 };
 
 struct stats_type {
     uint64_t way_nodes = 0;
     uint64_t self_intersection = 0;
     uint64_t spike = 0;
+    uint64_t acute_angle = 0;
     uint64_t duplicate_segment = 0;
     uint64_t no_node = 0;
     uint64_t single_node = 0;
@@ -201,11 +203,14 @@ class CheckHandler : public HandlerWithDB {
     gdalcpp::Layer m_layer_way_intersection_lines;
     gdalcpp::Layer m_layer_way_spike_points;
     gdalcpp::Layer m_layer_way_spike_lines;
+    gdalcpp::Layer m_layer_way_acute_angle_points;
+    gdalcpp::Layer m_layer_way_acute_angle_lines;
     gdalcpp::Layer m_layer_way_duplicate_segments;
     gdalcpp::Layer m_layer_way_many_nodes;
 
     std::unique_ptr<osmium::io::Writer> m_writer_self_intersection;
     std::unique_ptr<osmium::io::Writer> m_writer_spike;
+    std::unique_ptr<osmium::io::Writer> m_writer_acute_angle;
     std::unique_ptr<osmium::io::Writer> m_writer_duplicate_segment;
     std::unique_ptr<osmium::io::Writer> m_writer_no_node;
     std::unique_ptr<osmium::io::Writer> m_writer_single_node;
@@ -263,6 +268,64 @@ class CheckHandler : public HandlerWithDB {
         return false;
     }
 
+    static double calc_angle(const osmium::Location& a, const osmium::Location& m, const osmium::Location& b) {
+        const int64_t dax = a.x() - m.x();
+        const int64_t day = a.y() - m.y();
+        const int64_t dbx = b.x() - m.x();
+        const int64_t dby = b.y() - m.y();
+        const double dp = dax * dbx + day * dby;
+        const double m1 = std::sqrt(static_cast<double>(dax * dax + day * day));
+        const double m2 = std::sqrt(static_cast<double>(dbx * dbx + dby * dby));
+
+        if (m1 == 0 || m2 == 0) {
+            return 0;
+        }
+
+        const double cphi = dp / (m1 * m2);
+        return std::acos(cphi);
+    }
+
+    bool detect_acute_angles(const osmium::Way& way) noexcept {
+        if (way.nodes().size() < 3) {
+            return false;
+        }
+
+        auto prev = way.nodes().cbegin();
+        auto curr = prev + 1;
+        auto next = curr + 1;
+
+        bool result = false;
+
+        for (; next != way.nodes().end(); ++prev, ++curr, ++next) {
+            const auto angle = calc_angle(prev->location(), curr->location(), next->location());
+            if (angle < m_options.max_angle) {
+                result = true;
+                const auto ts = way.timestamp().to_iso();
+                {
+                    gdalcpp::Feature feature{m_layer_way_acute_angle_points, m_factory.create_point(curr->location())};
+                    feature.set_field("way_id", static_cast<int32_t>(way.id()));
+                    feature.set_field("timestamp", ts.c_str());
+                    feature.set_field("closed", way.is_closed());
+                    feature.set_field("angle", angle);
+                    feature.add_to_layer();
+                }
+                auto ogr_linestring = std::unique_ptr<OGRLineString>{new OGRLineString{}};
+                ogr_linestring->addPoint(prev->location().lon(), prev->location().lat());
+                ogr_linestring->addPoint(curr->location().lon(), curr->location().lat());
+                ogr_linestring->addPoint(next->location().lon(), next->location().lat());
+
+                gdalcpp::Feature feature{m_layer_way_acute_angle_lines, std::move(ogr_linestring)};
+                feature.set_field("way_id", static_cast<int32_t>(way.id()));
+                feature.set_field("timestamp", ts.c_str());
+                feature.set_field("closed", way.is_closed());
+                feature.set_field("angle", angle);
+                feature.add_to_layer();
+            }
+        }
+
+        return result;
+    }
+
 public:
 
     CheckHandler(const std::string& output_dirname, const options_type& options) :
@@ -274,6 +337,8 @@ public:
         m_layer_way_intersection_lines(m_dataset, "way_intersection_lines", wkbLineString, {"SPATIAL_INDEX=NO"}),
         m_layer_way_spike_points(m_dataset, "way_spike_points", wkbPoint, {"SPATIAL_INDEX=NO"}),
         m_layer_way_spike_lines(m_dataset, "way_spike_lines", wkbLineString, {"SPATIAL_INDEX=NO"}),
+        m_layer_way_acute_angle_points(m_dataset, "way_acute_angle_points", wkbPoint, {"SPATIAL_INDEX=NO"}),
+        m_layer_way_acute_angle_lines(m_dataset, "way_acute_angle_lines", wkbLineString, {"SPATIAL_INDEX=NO"}),
         m_layer_way_duplicate_segments(m_dataset, "way_duplicate_segments", wkbLineString, {"SPATIAL_INDEX=NO"}),
         m_layer_way_many_nodes(m_dataset, "way_many_nodes", wkbLineString, {"SPATIAL_INDEX=NO"}) {
 
@@ -301,6 +366,15 @@ public:
         m_layer_way_spike_lines.add_field("timestamp", OFTString, 20);
         m_layer_way_spike_lines.add_field("closed", OFTInteger, 1);
 
+        m_layer_way_acute_angle_points.add_field("way_id", OFTInteger, 10);
+        m_layer_way_acute_angle_points.add_field("timestamp", OFTString, 20);
+        m_layer_way_acute_angle_points.add_field("closed", OFTInteger, 1);
+        m_layer_way_acute_angle_points.add_field("angle", OFTReal, 20);
+        m_layer_way_acute_angle_lines.add_field("way_id", OFTInteger, 10);
+        m_layer_way_acute_angle_lines.add_field("timestamp", OFTString, 20);
+        m_layer_way_acute_angle_lines.add_field("closed", OFTInteger, 1);
+        m_layer_way_acute_angle_lines.add_field("angle", OFTReal, 20);
+
         m_layer_way_duplicate_segments.add_field("way_id", OFTInteger, 10);
         m_layer_way_duplicate_segments.add_field("timestamp", OFTString, 20);
         m_layer_way_duplicate_segments.add_field("closed", OFTInteger, 1);
@@ -312,6 +386,7 @@ public:
 
         open_writer(m_writer_self_intersection, output_dirname, "way-self-intersection");
         open_writer(m_writer_spike, output_dirname, "way-spike");
+        open_writer(m_writer_acute_angle, output_dirname, "way-acute-angle");
         open_writer(m_writer_duplicate_segment, output_dirname, "way-duplicate-segment");
         open_writer(m_writer_no_node, output_dirname, "way-no-node");
         open_writer(m_writer_single_node, output_dirname, "way-single-node");
@@ -381,6 +456,11 @@ public:
             ++m_stats.spike;
             (*m_writer_spike)(way);
             return;
+        }
+
+        if (detect_acute_angles(way)) {
+            ++m_stats.acute_angle;
+            (*m_writer_acute_angle)(way);
         }
 
         std::sort(segments.begin(), segments.end());
@@ -455,6 +535,7 @@ public:
     void close() {
         (*m_writer_self_intersection).close();
         (*m_writer_spike).close();
+        (*m_writer_acute_angle).close();
         (*m_writer_duplicate_segment).close();
         (*m_writer_no_node).close();
         (*m_writer_single_node).close();
@@ -593,6 +674,7 @@ int main(int argc, char* argv[]) {
         add("way_nodes", handler.stats().way_nodes);
         add("way_self_intersection", handler.stats().self_intersection);
         add("way_spike", handler.stats().spike);
+        add("way_acute_angle", handler.stats().acute_angle);
         add("way_duplicate_segment", handler.stats().duplicate_segment);
         add("way_no_node", handler.stats().no_node);
         add("way_single_node", handler.stats().single_node);
