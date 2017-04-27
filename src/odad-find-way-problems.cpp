@@ -232,7 +232,7 @@ class CheckHandler : public HandlerWithDB {
         auto next = curr + 1;
 
         for (; next != last; ++prev, ++curr, ++next) {
-            if (prev->location() == next->location()) {
+            if (prev->location() == next->location() && prev->location() != curr->location()) {
                 // found spike
                 const auto ts = way.timestamp().to_iso();
                 {
