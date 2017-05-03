@@ -290,6 +290,10 @@ class CheckHandler : public osmium::handler::Handler {
     }
 
     void multipolygon_relation(const osmium::Relation& relation) {
+        if (relation.members().empty()) {
+            return;
+        }
+
         std::uint64_t node_member = 0;
         std::uint64_t relation_member = 0;
         std::uint64_t unknown_role = 0;
@@ -358,6 +362,10 @@ class CheckHandler : public osmium::handler::Handler {
     }
 
     void boundary_relation(const osmium::Relation& relation) {
+        if (relation.members().empty()) {
+            return;
+        }
+
         uint64_t empty_role = 0;
         for (const auto& member : relation.members()) {
             if (member.role()[0] == '\0') {
