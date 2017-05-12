@@ -356,8 +356,12 @@ class CheckHandler : public osmium::handler::Handler {
         }
 
         const char* boundary = relation.tags().get_value_by_key("boundary");
-        if (boundary && !std::strcmp(boundary, "administrative")) {
-            m_outputs["multipolygon_boundary_administrative_tag"].add(relation);
+        if (boundary) {
+            if (!std::strcmp(boundary, "administrative")) {
+                m_outputs["multipolygon_boundary_administrative_tag"].add(relation);
+            } else {
+                m_outputs["multipolygon_boundary_other_tag"].add(relation);
+            }
         }
     }
 
@@ -570,6 +574,7 @@ int main(int argc, char* argv[]) {
     outputs.add("multipolygon_empty_role", false, true);
     outputs.add("multipolygon_area_tag", false, true);
     outputs.add("multipolygon_boundary_administrative_tag", false, true);
+    outputs.add("multipolygon_boundary_other_tag", false, true);
     outputs.add("multipolygon_old_style", false, false);
     outputs.add("multipolygon_single_way", false, true);
     outputs.add("multipolygon_duplicate_way", false, true);
