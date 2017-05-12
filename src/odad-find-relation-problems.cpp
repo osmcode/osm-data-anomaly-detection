@@ -559,6 +559,13 @@ int main(int argc, char* argv[]) {
         vout << "  Get only objects last changed before: " << options.before_time << " (change with --age, -a or --before, -b)\n";
     }
 
+    osmium::io::File file{input_filename};
+    osmium::io::Reader reader{file, osmium::osm_entity_bits::relation};
+    if (file.format() == osmium::io::file_format::pbf && !has_locations_on_ways(reader.header())) {
+        std::cerr << "Input file must have locations on ways.\n";
+        return 2;
+    }
+
     osmium::io::Header header;
     header.set("generator", program_name);
 
@@ -582,8 +589,6 @@ int main(int argc, char* argv[]) {
     outputs.add("boundary_duplicate_way", false, true);
     outputs.add("boundary_area_tag", false, true);
     outputs.add("boundary_no_boundary_tag", false, true);
-
-    osmium::io::Reader reader{input_filename, osmium::osm_entity_bits::relation};
 
     LastTimestampHandler last_timestamp_handler;
     CheckHandler handler{outputs, options};

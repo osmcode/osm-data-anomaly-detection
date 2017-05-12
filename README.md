@@ -169,6 +169,11 @@ command on how to create this.
 
 Finds several problems with relations.
 
+This command needs as input an OSM file with node locations on ways. See the
+osmium
+[add-locations-to-ways](http://docs.osmcode.org/osmium/latest/osmium-add-locations-to-ways.html)
+command on how to create this.
+
 ## License
 
 Copyright (C) 2017  Jochen Topf (jochen@topf.org)

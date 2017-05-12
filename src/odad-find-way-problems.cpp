@@ -555,16 +555,6 @@ public:
 
 }; // class CheckHandler
 
-static bool has_locations_on_ways(const osmium::io::Header& header) {
-    for (const auto& option : header) {
-        if (option.second == "LocationsOnWays") {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 static void print_help() {
     std::cout << program_name << " [OPTIONS] OSM-FILE OUTPUT-DIR\n\n"
               << "Find ways with problems.\n"

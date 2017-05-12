@@ -25,6 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <osmium/geom/ogr.hpp>
 #include <osmium/handler.hpp>
+#include <osmium/io/header.hpp>
 #include <osmium/util/file.hpp>
 
 #include <gdalcpp.hpp>
@@ -93,6 +94,16 @@ void write_stats(const std::string& database_name, const osmium::Timestamp& time
     };
 
     std::forward<TFunc>(func)(add);
+}
+
+inline bool has_locations_on_ways(const osmium::io::Header& header) {
+    for (const auto& option : header) {
+        if (option.second == "LocationsOnWays") {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 #endif // UTILS_HPP
