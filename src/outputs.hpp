@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 */
 
+#include <iostream>
 #include <map>
 #include <string>
 #include <tuple>
@@ -83,8 +84,8 @@ class Output {
                     feature.set_field("timestamp", ts.c_str());
                     feature.set_field("mark", 0);
                     feature.add_to_layer();
-                } catch (osmium::geometry_error&) {
-                    // ignore geometry errors
+                } catch (osmium::geometry_error& e) {
+                    std::cerr << "Geometry error writing out node " << object.id() << " for relation " << rel_id << ": " << e.what() << '\n';
                 }
             } else if (object.type() == osmium::item_type::way && m_layer_lines) {
                 try {
@@ -94,8 +95,8 @@ class Output {
                     feature.set_field("timestamp", ts.c_str());
                     feature.set_field("mark", check_mark(rel_id, object.positive_id()));
                     feature.add_to_layer();
-                } catch (osmium::geometry_error&) {
-                    // ignore geometry errors
+                } catch (osmium::geometry_error& e) {
+                    std::cerr << "Geometry error writing out way " << object.id() << " for relation " << rel_id << ": " << e.what() << '\n';
                 }
             }
         }
