@@ -36,7 +36,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 class Output {
 
-    using id_map_type = std::vector<std::pair<osmium::unsigned_object_id_type, osmium::unsigned_object_id_type>>;
+    struct mem_rel_mapping {
+
+        osmium::unsigned_object_id_type member_id;
+        osmium::unsigned_object_id_type relation_id;
+
+        mem_rel_mapping(osmium::unsigned_object_id_type mem_id, osmium::unsigned_object_id_type rel_id = 0) :
+            member_id(mem_id),
+            relation_id(rel_id) {
+        }
+
+        bool operator<(const mem_rel_mapping& other) noexcept {
+            return std::tie(member_id, relation_id) < std::tie(other.member_id, other.relation_id);
+        }
+
+    }; // struct mem_rel_mapping
+
+    using id_map_type = std::vector<mem_rel_mapping>;
 
     std::string m_name;
     std::map<osmium::unsigned_object_id_type, std::vector<osmium::unsigned_object_id_type>> m_marks;
@@ -75,7 +91,7 @@ class Output {
         const auto ts = object.timestamp().to_iso();
 
         for (auto it = range.first; it != range.second; ++it) {
-            const auto rel_id = it->second;
+            const auto rel_id = it->relation_id;
             if (object.type() == osmium::item_type::node && m_layer_points) {
                 try {
                     gdalcpp::Feature feature{*m_layer_points, m_factory.create_point(static_cast<const osmium::Node&>(object))};
@@ -157,8 +173,8 @@ public:
 
     void write_to_all(const osmium::OSMObject& object) {
         const auto& map = m_id_maps(object.type());
-        const auto range = std::equal_range(map.begin(), map.end(), std::make_pair(object.positive_id(), 0ul), [](const id_pair& a, const id_pair& b){
-            return a.first < b.first;
+        const auto range = std::equal_range(map.begin(), map.end(), mem_rel_mapping{object.positive_id()}, [](const mem_rel_mapping& a, const mem_rel_mapping& b){
+            return a.member_id < b.member_id;
         });
         if (range.first != range.second) {
             m_writer_all(object);
