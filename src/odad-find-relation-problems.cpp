@@ -572,10 +572,10 @@ int main(int argc, char* argv[]) {
 
     vout << "Writing out stats...\n";
     const auto last_time{last_timestamp_handler.get_timestamp()};
-    write_stats(output_dirname + "/stats-relation-problems.db", last_time, [&](std::function<void(const char*, uint64_t)>& add){
-        add("relation_member_count", handler.stats().relation_members);
+    write_stats(output_dirname + "/stats-relation-problems.db", last_time, [&](std::function<void(const char*, uint64_t)>& add_stat){
+        add_stat("relation_member_count", handler.stats().relation_members);
         outputs.for_all([&](Output& output){
-            add(output.name(), output.counter());
+            add_stat(output.name(), output.counter());
         });
     });
 
