@@ -10,6 +10,10 @@ add_executable(odad-find-colocated-nodes odad-find-colocated-nodes.cpp)
 target_link_libraries(odad-find-colocated-nodes ${OSMIUM_LIBRARIES} sqlite3)
 install(TARGETS odad-find-colocated-nodes DESTINATION bin)
 
+add_executable(odad-find-multipolygon-problems odad-find-multipolygon-problems.cpp)
+target_link_libraries(odad-find-multipolygon-problems ${OSMIUM_LIBRARIES} sqlite3)
+install(TARGETS odad-find-multipolygon-problems DESTINATION bin)
+
 add_executable(odad-find-orphans odad-find-orphans.cpp)
 target_link_libraries(odad-find-orphans ${OSMIUM_LIBRARIES} sqlite3)
 install(TARGETS odad-find-orphans DESTINATION bin)
