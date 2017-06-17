@@ -44,6 +44,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <gdalcpp.hpp>
 
+#include "outputs.hpp"
 #include "utils.hpp"
 
 static const char* program_name = "odad-find-relation-problems";
@@ -207,46 +208,6 @@ public:
 
 }; // class Output
 
-class Outputs {
-
-    std::map<std::string, Output> m_outputs;
-    std::string m_dirname;
-    osmium::io::Header m_header;
-    osmium::geom::OGRFactory<> m_factory;
-    gdalcpp::Dataset m_dataset;
-
-public:
-
-    Outputs(const std::string& dirname, osmium::io::Header& header) :
-        m_outputs(),
-        m_dirname(dirname),
-        m_header(header),
-        m_factory(),
-        m_dataset("SQLite", dirname + "/geoms-relation-problems.db", gdalcpp::SRS{m_factory.proj_string()}, { "SPATIALITE=TRUE", "INIT_WITH_EPSG=NO" }) {
-        CPLSetConfigOption("OGR_SQLITE_SYNCHRONOUS", "OFF");
-        m_dataset.enable_auto_transactions();
-        m_dataset.exec("PRAGMA journal_mode = OFF;");
-    }
-
-    void add(const char* name, bool points = true, bool lines = true) {
-        m_outputs.emplace(std::piecewise_construct,
-                          std::forward_as_tuple(name),
-                          std::forward_as_tuple(name, m_dataset, m_factory, m_dirname, m_header, points, lines));
-    }
-
-    Output& operator[](const char* name) {
-        return m_outputs.at(name);
-    }
-
-    template <typename TFunc>
-    void for_all(TFunc&& func) {
-        for (auto& out : m_outputs) {
-            std::forward<TFunc>(func)(out.second);
-        }
-    }
-
-}; // class Outputs
-
 struct MPFilter : public osmium::TagsFilter {
 
     MPFilter() : osmium::TagsFilter(true) {
@@ -260,7 +221,7 @@ struct MPFilter : public osmium::TagsFilter {
 
 class CheckHandler : public osmium::handler::Handler {
 
-    Outputs& m_outputs;
+    Outputs<Output>& m_outputs;
     options_type m_options;
     stats_type m_stats;
     MPFilter m_mp_filter;
@@ -399,7 +360,7 @@ class CheckHandler : public osmium::handler::Handler {
 
 public:
 
-    CheckHandler(Outputs& outputs, const options_type& options) :
+    CheckHandler(Outputs<Output>& outputs, const options_type& options) :
         m_outputs(outputs),
         m_options(options),
         m_stats(),
@@ -520,7 +481,7 @@ static options_type parse_command_line(int argc, char* argv[]) {
     return options;
 }
 
-static void write_data_files(const std::string& input_filename, Outputs& outputs) {
+static void write_data_files(const std::string& input_filename, Outputs<Output>& outputs) {
     osmium::io::Reader reader{input_filename};
     osmium::ProgressBar progress_bar{reader.file_size(), display_progress()};
 
@@ -569,26 +530,26 @@ int main(int argc, char* argv[]) {
     osmium::io::Header header;
     header.set("generator", program_name);
 
-    Outputs outputs{output_dirname, header};
-    outputs.add("relation_no_members", false, false);
-    outputs.add("relation_no_tag");
-    outputs.add("relation_only_type_tag");
-    outputs.add("relation_no_type_tag");
-    outputs.add("relation_large");
-    outputs.add("multipolygon_node_member", true, false);
-    outputs.add("multipolygon_relation_member", false, false);
-    outputs.add("multipolygon_unknown_role", false, true);
-    outputs.add("multipolygon_empty_role", false, true);
-    outputs.add("multipolygon_area_tag", false, true);
-    outputs.add("multipolygon_boundary_administrative_tag", false, true);
-    outputs.add("multipolygon_boundary_other_tag", false, true);
-    outputs.add("multipolygon_old_style", false, false);
-    outputs.add("multipolygon_single_way", false, true);
-    outputs.add("multipolygon_duplicate_way", false, true);
-    outputs.add("boundary_empty_role", false, true);
-    outputs.add("boundary_duplicate_way", false, true);
-    outputs.add("boundary_area_tag", false, true);
-    outputs.add("boundary_no_boundary_tag", false, true);
+    Outputs<Output> outputs{output_dirname, "geoms-relation-problems", header};
+    outputs.add_output("relation_no_members", false, false);
+    outputs.add_output("relation_no_tag");
+    outputs.add_output("relation_only_type_tag");
+    outputs.add_output("relation_no_type_tag");
+    outputs.add_output("relation_large");
+    outputs.add_output("multipolygon_node_member", true, false);
+    outputs.add_output("multipolygon_relation_member", false, false);
+    outputs.add_output("multipolygon_unknown_role", false, true);
+    outputs.add_output("multipolygon_empty_role", false, true);
+    outputs.add_output("multipolygon_area_tag", false, true);
+    outputs.add_output("multipolygon_boundary_administrative_tag", false, true);
+    outputs.add_output("multipolygon_boundary_other_tag", false, true);
+    outputs.add_output("multipolygon_old_style", false, false);
+    outputs.add_output("multipolygon_single_way", false, true);
+    outputs.add_output("multipolygon_duplicate_way", false, true);
+    outputs.add_output("boundary_empty_role", false, true);
+    outputs.add_output("boundary_duplicate_way", false, true);
+    outputs.add_output("boundary_area_tag", false, true);
+    outputs.add_output("boundary_no_boundary_tag", false, true);
 
     LastTimestampHandler last_timestamp_handler;
     CheckHandler handler{outputs, options};
