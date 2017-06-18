@@ -35,7 +35,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <osmium/osm/object.hpp>
 #include <osmium/relations/generic_relations_manager.hpp>
 #include <osmium/relations/manager_util.hpp>
-#include <osmium/tags/filter.hpp>
+#include <osmium/tags/taglist.hpp>
 #include <osmium/tags/tags_filter.hpp>
 #include <osmium/util/file.hpp>
 #include <osmium/util/memory.hpp>
@@ -54,6 +54,7 @@ struct options_type {
 
 struct stats_type {
     uint64_t multipolygon_relations = 0;
+    uint64_t multipolygon_relations_without_tags = 0;
     uint64_t multipolygon_relation_members = 0;
     uint64_t multipolygon_relation_way_members = 0;
     uint64_t multipolygon_relation_members_with_same_tags = 0;
@@ -108,6 +109,11 @@ public:
 
     void operator()(const osmium::Relation& relation, const std::vector<const osmium::OSMObject*>& members, osmium::memory::Buffer&) {
         ++m_stats.multipolygon_relations;
+
+        if (osmium::tags::match_none_of(relation.tags(), m_filter)) {
+            ++m_stats.multipolygon_relations_without_tags;
+            return;
+        }
 
         std::vector<osmium::unsigned_object_id_type> marks;
         for (const auto* member : members) {
@@ -255,6 +261,7 @@ int main(int argc, char* argv[]) {
     const auto last_time{last_timestamp_handler.get_timestamp()};
     write_stats(output_dirname + "/stats-multipolygon-problems.db", last_time, [&](std::function<void(const char*, uint64_t)>& add_stat){
         add_stat("multipolygon_relations",                       assembler.stats().multipolygon_relations);
+        add_stat("multipolygon_relations_without_tags",          assembler.stats().multipolygon_relations_without_tags);
         add_stat("multipolygon_relation_members",                assembler.stats().multipolygon_relation_members);
         add_stat("multipolygon_relation_way_members",            assembler.stats().multipolygon_relation_way_members);
         add_stat("multipolygon_relation_members_with_same_tags", assembler.stats().multipolygon_relation_members_with_same_tags);
