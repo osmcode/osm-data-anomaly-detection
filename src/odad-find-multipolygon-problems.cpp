@@ -33,8 +33,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <osmium/io/file.hpp>
 #include <osmium/osm/entity_bits.hpp>
 #include <osmium/osm/object.hpp>
-#include <osmium/relations/generic_relations_manager.hpp>
 #include <osmium/relations/manager_util.hpp>
+#include <osmium/relations/relations_manager.hpp>
 #include <osmium/tags/taglist.hpp>
 #include <osmium/tags/tags_filter.hpp>
 #include <osmium/util/file.hpp>
@@ -71,7 +71,7 @@ struct MPFilter : public osmium::TagsFilter {
 
 }; // struct MPFilter
 
-class CheckAssembler {
+class CheckMPManager : public osmium::relations::RelationsManager<CheckMPManager, true, true, true> {
 
     Outputs& m_outputs;
     options_type m_options;
@@ -96,7 +96,7 @@ class CheckAssembler {
 
 public:
 
-    CheckAssembler(Outputs& outputs, const options_type& options) :
+    CheckMPManager(Outputs& outputs, const options_type& options) :
         m_outputs(outputs),
         m_options(options),
         m_stats(),
@@ -107,22 +107,37 @@ public:
         return m_stats;
     }
 
-    void operator()(const osmium::Relation& relation, const std::vector<const osmium::OSMObject*>& members, osmium::memory::Buffer&) {
-        ++m_stats.multipolygon_relations;
+    bool new_relation(const osmium::Relation& relation) noexcept {
+        if (relation.tags().has_tag("type", "multipolygon")) {
+            ++m_stats.multipolygon_relations;
+            return true;
+        }
+        return false;
+    }
 
+    bool new_member(const osmium::Relation& /*relation*/, const osmium::RelationMember& member, std::size_t /*n*/) noexcept {
+        ++m_stats.multipolygon_relation_members;
+        if (member.type() == osmium::item_type::way) {
+            ++m_stats.multipolygon_relation_way_members;
+            return true;
+        }
+        return false;
+    }
+
+    void complete_relation(const osmium::Relation& relation) {
         if (osmium::tags::match_none_of(relation.tags(), m_filter)) {
             ++m_stats.multipolygon_relations_without_tags;
             return;
         }
 
         std::vector<osmium::unsigned_object_id_type> marks;
-        for (const auto* member : members) {
-            ++m_stats.multipolygon_relation_members;
-            if (member->type() == osmium::item_type::way) {
-                ++m_stats.multipolygon_relation_way_members;
-                if (compare_tags(relation.tags(), member->tags())) {
+
+        for (const auto& member : relation.members()) {
+            if (member.type() == osmium::item_type::way) {
+                const auto* way = this->get_member_way(member.ref());
+                if (compare_tags(relation.tags(), way->tags())) {
                     ++m_stats.multipolygon_relation_members_with_same_tags;
-                    marks.push_back(member->positive_id());
+                    marks.push_back(way->positive_id());
                 }
             }
         }
@@ -132,7 +147,7 @@ public:
         }
     }
 
-}; // CheckAssembler
+}; // CheckMPManager
 
 static void print_help() {
     std::cout << program_name << " [OPTIONS] OSM-FILE OUTPUT-DIR\n\n"
@@ -223,13 +238,10 @@ int main(int argc, char* argv[]) {
     LastTimestampHandler last_timestamp_handler;
 
     vout << "Reading relations and checking for problems...\n";
-    auto file_size = osmium::util::file_size(input_filename);
+    const auto file_size = osmium::util::file_size(input_filename);
     osmium::ProgressBar progress_bar{file_size * 2, display_progress()};
 
-    CheckAssembler assembler{outputs, options};
-    osmium::TagsFilter filter{false};
-    filter.add_rule(true, "type", "multipolygon");
-    osmium::relations::GenericRelationsManager<CheckAssembler> manager{assembler, filter};
+    CheckMPManager manager{outputs, options};
 
     osmium::io::File file{input_filename};
     osmium::relations::read_relations(file, manager);
@@ -260,11 +272,11 @@ int main(int argc, char* argv[]) {
     vout << "Writing out stats...\n";
     const auto last_time{last_timestamp_handler.get_timestamp()};
     write_stats(output_dirname + "/stats-multipolygon-problems.db", last_time, [&](std::function<void(const char*, uint64_t)>& add_stat){
-        add_stat("multipolygon_relations",                       assembler.stats().multipolygon_relations);
-        add_stat("multipolygon_relations_without_tags",          assembler.stats().multipolygon_relations_without_tags);
-        add_stat("multipolygon_relation_members",                assembler.stats().multipolygon_relation_members);
-        add_stat("multipolygon_relation_way_members",            assembler.stats().multipolygon_relation_way_members);
-        add_stat("multipolygon_relation_members_with_same_tags", assembler.stats().multipolygon_relation_members_with_same_tags);
+        add_stat("multipolygon_relations",                       manager.stats().multipolygon_relations);
+        add_stat("multipolygon_relations_without_tags",          manager.stats().multipolygon_relations_without_tags);
+        add_stat("multipolygon_relation_members",                manager.stats().multipolygon_relation_members);
+        add_stat("multipolygon_relation_way_members",            manager.stats().multipolygon_relation_way_members);
+        add_stat("multipolygon_relation_members_with_same_tags", manager.stats().multipolygon_relation_members_with_same_tags);
         outputs.for_all([&](Output& output){
             add_stat(output.name(), output.counter());
         });
