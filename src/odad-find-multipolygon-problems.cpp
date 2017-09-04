@@ -58,6 +58,7 @@ struct stats_type {
     uint64_t multipolygon_relation_members = 0;
     uint64_t multipolygon_relation_way_members = 0;
     uint64_t multipolygon_relation_members_with_same_tags = 0;
+    uint64_t multipolygon_relation_members_with_conflicting_tags = 0;
 };
 
 struct MPFilter : public osmium::TagsFilter {
@@ -71,12 +72,19 @@ struct MPFilter : public osmium::TagsFilter {
 
 }; // struct MPFilter
 
+struct KeyCompare {
+    bool operator()(const osmium::Tag& lhs, const osmium::Tag& rhs) const noexcept {
+        return !strcmp(lhs.key(), rhs.key());
+    }
+}; // struct KeyCompare
+
 class CheckMPManager : public osmium::relations::RelationsManager<CheckMPManager, true, true, true> {
 
     Outputs& m_outputs;
     options_type m_options;
     stats_type m_stats;
     MPFilter m_filter;
+    KeyCompare m_key_compare;
 
     bool compare_tags(const osmium::TagList& rtags, const osmium::TagList& wtags) const noexcept {
         const auto d = std::count_if(wtags.cbegin(), wtags.cend(), std::cref(m_filter));
@@ -88,6 +96,25 @@ class CheckMPManager : public osmium::relations::RelationsManager<CheckMPManager
             iterator wfi_end{std::cref(m_filter), wtags.cend(), wtags.cend()};
 
             if (std::equal(wfi_begin, wfi_end, rfi_begin) && d == std::distance(rfi_begin, rfi_end)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if a way and a relation have identical keys.
+     */
+    bool conflicting_tags(const osmium::TagList& rtags, const osmium::TagList& wtags) const noexcept {
+        const auto d = std::count_if(wtags.cbegin(), wtags.cend(), std::cref(m_filter));
+        if (d > 0) {
+            using iterator = boost::filter_iterator<MPFilter, osmium::TagList::const_iterator>;
+            iterator rfi_begin{std::cref(m_filter), rtags.cbegin(), rtags.cend()};
+            iterator rfi_end{std::cref(m_filter), rtags.cend(), rtags.cend()};
+            iterator wfi_begin{std::cref(m_filter), wtags.cbegin(), wtags.cend()};
+            iterator wfi_end{std::cref(m_filter), wtags.cend(), wtags.cend()};
+
+            if (std::equal(wfi_begin, wfi_end, rfi_begin, m_key_compare) && d == std::distance(rfi_begin, rfi_end)) {
                 return true;
             }
         }
@@ -131,6 +158,8 @@ public:
         }
 
         std::vector<osmium::unsigned_object_id_type> marks;
+        bool same_tags = false;
+        bool same_keys = false;
 
         for (const auto& member : relation.members()) {
             if (member.type() == osmium::item_type::way) {
@@ -138,12 +167,22 @@ public:
                 if (compare_tags(relation.tags(), way->tags())) {
                     ++m_stats.multipolygon_relation_members_with_same_tags;
                     marks.push_back(way->positive_id());
+                    same_tags = true;
+                } else if (way->is_closed() && strcmp(member.role(), "inner") && conflicting_tags(relation.tags(), way->tags())) {
+                    // Check only outer rings. Otherwise inner rings of a forest multipolygon relation
+                    // are flagged as errors because the inner ring is a meadow.
+                    ++m_stats.multipolygon_relation_members_with_conflicting_tags;
+                    marks.push_back(way->positive_id());
+                    same_keys = true;
                 }
             }
         }
 
-        if (!marks.empty()) {
+        if (!marks.empty() && same_tags) {
             m_outputs["multipolygon_relations_with_same_tags"].add(relation, 1, marks);
+        }
+        if (!marks.empty() && same_keys) {
+            m_outputs["multipolygon_relations_with_same_keys"].add(relation, 1, marks);
         }
     }
 
@@ -234,6 +273,7 @@ int main(int argc, char* argv[]) {
 
     Outputs outputs{output_dirname, "geoms-multipolygon-problems", header};
     outputs.add_output("multipolygon_relations_with_same_tags", false, true);
+    outputs.add_output("multipolygon_relations_with_same_keys", false, true);
 
     LastTimestampHandler last_timestamp_handler;
 
@@ -277,6 +317,7 @@ int main(int argc, char* argv[]) {
         add_stat("multipolygon_relation_members",                manager.stats().multipolygon_relation_members);
         add_stat("multipolygon_relation_way_members",            manager.stats().multipolygon_relation_way_members);
         add_stat("multipolygon_relation_members_with_same_tags", manager.stats().multipolygon_relation_members_with_same_tags);
+        add_stat("multipolygon_relation_members_with_same_keys", manager.stats().multipolygon_relation_members_with_conflicting_tags);
         outputs.for_all([&](Output& output){
             add_stat(output.name(), output.counter());
         });
