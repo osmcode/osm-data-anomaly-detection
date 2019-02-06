@@ -54,8 +54,7 @@
 #
 #----------------------------------------------------------------------
 
-# This is the list of directories where we look for osmium and protozero
-# includes.
+# This is the list of directories where we look for osmium includes.
 set(_osmium_include_path
         ../libosmium
         ~/Library/Frameworks
@@ -72,6 +71,9 @@ find_path(OSMIUM_INCLUDE_DIR osmium/version.hpp
 
 # Check libosmium version number
 if(Osmium_FIND_VERSION)
+    if(NOT EXISTS "${OSMIUM_INCLUDE_DIR}/osmium/version.hpp")
+        message(FATAL_ERROR "Missing ${OSMIUM_INCLUDE_DIR}/osmium/version.hpp. Either your libosmium version is too old, or libosmium wasn't found in the place you said.")
+    endif()
     file(STRINGS "${OSMIUM_INCLUDE_DIR}/osmium/version.hpp" _libosmium_version_define REGEX "#define LIBOSMIUM_VERSION_STRING")
     if("${_libosmium_version_define}" MATCHES "#define LIBOSMIUM_VERSION_STRING \"([0-9.]+)\"")
         set(_libosmium_version "${CMAKE_MATCH_1}")
@@ -112,29 +114,14 @@ endif()
 if(Osmium_USE_PBF)
     find_package(ZLIB)
     find_package(Threads)
-
-    message(STATUS "Looking for protozero")
-    find_path(PROTOZERO_INCLUDE_DIR protozero/version.hpp
-        PATH_SUFFIXES include
-        PATHS ${_osmium_include_path}
-              ${OSMIUM_INCLUDE_DIR}
-    )
-    if(PROTOZERO_INCLUDE_DIR)
-        message(STATUS "Looking for protozero - found")
-    else()
-        message(STATUS "Looking for protozero - not found")
-    endif()
+    find_package(Protozero 1.6.3)
 
     list(APPEND OSMIUM_EXTRA_FIND_VARS ZLIB_FOUND Threads_FOUND PROTOZERO_INCLUDE_DIR)
-    if(ZLIB_FOUND AND Threads_FOUND AND PROTOZERO_INCLUDE_DIR)
+    if(ZLIB_FOUND AND Threads_FOUND AND PROTOZERO_FOUND)
         list(APPEND OSMIUM_PBF_LIBRARIES
             ${ZLIB_LIBRARIES}
             ${CMAKE_THREAD_LIBS_INIT}
         )
-        if(WIN32)
-            # This is needed for the ntohl() function
-            list(APPEND OSMIUM_PBF_LIBRARIES ws2_32)
-        endif()
         list(APPEND OSMIUM_INCLUDE_DIRS
             ${ZLIB_INCLUDE_DIR}
             ${PROTOZERO_INCLUDE_DIR}
@@ -333,10 +320,14 @@ if(MSVC)
     # old compilers anyway.
     add_definitions(-wd4351)
 
+    # Disable warning C4503: "decorated name length exceeded, name was truncated"
+    # there are more than 150 of generated names in libosmium longer than 4096 symbols supported in MSVC
+    add_definitions(-wd4503)
+
     add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -D_CRT_SECURE_NO_WARNINGS)
 endif()
 
-if(APPLE)
+if(APPLE AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 # following only available from cmake 2.8.12:
 #   add_compile_options(-stdlib=libc++)
 # so using this instead:
@@ -357,10 +348,10 @@ endif()
 set(OSMIUM_DRACONIC_CLANG_OPTIONS "-Wdocumentation -Wunused-exception-parameter -Wmissing-declarations -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-unused-macros -Wno-exit-time-destructors -Wno-global-constructors -Wno-padded -Wno-switch-enum -Wno-missing-prototypes -Wno-weak-vtables -Wno-cast-align -Wno-float-equal")
 
 if(Osmium_DEBUG)
-    message(STATUS "OSMIUM_XML_LIBRARIES=" ${OSMIUM_XML_LIBRARIES})
-    message(STATUS "OSMIUM_PBF_LIBRARIES=" ${OSMIUM_PBF_LIBRARIES})
-    message(STATUS "OSMIUM_IO_LIBRARIES=" ${OSMIUM_IO_LIBRARIES})
-    message(STATUS "OSMIUM_LIBRARIES=" ${OSMIUM_LIBRARIES})
-    message(STATUS "OSMIUM_INCLUDE_DIRS=" ${OSMIUM_INCLUDE_DIRS})
+    message(STATUS "OSMIUM_XML_LIBRARIES=${OSMIUM_XML_LIBRARIES}")
+    message(STATUS "OSMIUM_PBF_LIBRARIES=${OSMIUM_PBF_LIBRARIES}")
+    message(STATUS "OSMIUM_IO_LIBRARIES=${OSMIUM_IO_LIBRARIES}")
+    message(STATUS "OSMIUM_LIBRARIES=${OSMIUM_LIBRARIES}")
+    message(STATUS "OSMIUM_INCLUDE_DIRS=${OSMIUM_INCLUDE_DIRS}")
 endif()
 
