@@ -606,6 +606,7 @@ static options_type parse_command_line(int argc, char* argv[]) {
                 std::exit(0);
             case 'm':
                 options.max_nodes = std::atoi(optarg);
+                break;
             case 'q':
                 options.verbose = false;
                 break;
