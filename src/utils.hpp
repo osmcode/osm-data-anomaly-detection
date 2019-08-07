@@ -21,11 +21,15 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 */
+
+#include <cstdlib>
+#include <ctime>
 #include <string>
 
 #include <osmium/geom/ogr.hpp>
 #include <osmium/handler.hpp>
 #include <osmium/io/header.hpp>
+#include <osmium/osm/timestamp.hpp>
 #include <osmium/util/file.hpp>
 
 #include <gdalcpp.hpp>
@@ -104,6 +108,16 @@ inline bool has_locations_on_ways(const osmium::io::Header& header) {
     }
 
     return false;
+}
+
+inline osmium::Timestamp build_timestamp(const char* ts) {
+    char* end = nullptr;
+    errno = 0;
+    const auto s = std::strtoll(ts, &end, 10);
+    if (errno != 0 || !end || *end != '\0' || s < 0) {
+        throw std::runtime_error{std::string{"Value not allowed for age: "} + ts};
+    }
+    return osmium::Timestamp{std::time(nullptr) - s * 60 * 60 * 24};
 }
 
 #endif // UTILS_HPP

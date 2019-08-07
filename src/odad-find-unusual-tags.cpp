@@ -286,7 +286,7 @@ static options_type parse_command_line(int argc, char* argv[]) {
                     std::cerr << "You can not use both -a,--age and -b,--before together\n";
                     std::exit(2);
                 }
-                options.before_time = osmium::Timestamp{std::time(nullptr) - std::atoi(optarg) * 60 * 60 * 24};
+                options.before_time = build_timestamp(optarg);
                 break;
             case 'b':
                 if (options.before_time != osmium::end_of_time()) {
