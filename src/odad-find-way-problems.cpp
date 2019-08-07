@@ -102,10 +102,7 @@ static osmium::Location intersection(const osmium::Segment& s1, const osmium::Se
 }
 
 static bool outside_x_range(const osmium::UndirectedSegment& s1, const osmium::UndirectedSegment& s2) noexcept {
-    if (s1.first().x() > s2.second().x()) {
-        return true;
-    }
-    return false;
+    return s1.first().x() > s2.second().x();
 }
 
 static bool y_range_overlap(const osmium::UndirectedSegment& s1, const osmium::UndirectedSegment& s2) noexcept {
@@ -113,10 +110,7 @@ static bool y_range_overlap(const osmium::UndirectedSegment& s1, const osmium::U
     const int tmax = s1.first().y() < s1.second().y() ? s1.second().y() : s1.first().y();
     const int omin = s2.first().y() < s2.second().y() ? s2.first().y()  : s2.second().y();
     const int omax = s2.first().y() < s2.second().y() ? s2.second().y() : s2.first().y();
-    if (tmin > omax || omin > tmax) {
-        return false;
-    }
-    return true;
+    return !(tmin > omax || omin > tmax);
 }
 
 static void open_writer(std::unique_ptr<osmium::io::Writer>& wptr, const std::string& dir, const std::string& name) {
