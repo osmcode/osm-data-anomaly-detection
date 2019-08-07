@@ -214,7 +214,7 @@ static void write_data_files(const std::string& input_filename, Outputs& outputs
     });
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) try {
     const auto options = parse_command_line(argc, argv);
 
     osmium::util::VerboseOutput vout{options.verbose};
@@ -288,5 +288,8 @@ int main(int argc, char* argv[]) {
     vout << "Done with " << program_name << ".\n";
 
     return 0;
+} catch (const std::exception& e) {
+    std::cerr << e.what() << '\n';
+    std::exit(1);
 }
 

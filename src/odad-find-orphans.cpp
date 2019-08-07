@@ -276,7 +276,7 @@ static options_type parse_command_line(int argc, char* argv[]) {
     return options;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) try {
     const auto options = parse_command_line(argc, argv);
 
     osmium::util::VerboseOutput vout{options.verbose};
@@ -338,5 +338,8 @@ int main(int argc, char* argv[]) {
     vout << "Done with " << program_name << ".\n";
 
     return 0;
+} catch (const std::exception& e) {
+    std::cerr << e.what() << '\n';
+    std::exit(1);
 }
 
