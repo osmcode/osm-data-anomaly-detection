@@ -127,19 +127,19 @@ class CheckHandler : public osmium::handler::Handler {
             }
         }
 
-        if (node_member) {
+        if (node_member != 0u) {
             m_outputs["multipolygon_node_member"].add(relation, node_member);
         }
 
-        if (relation_member) {
+        if (relation_member != 0u) {
             m_outputs["multipolygon_relation_member"].add(relation, relation_member);
         }
 
-        if (unknown_role) {
+        if (unknown_role != 0u) {
             m_outputs["multipolygon_unknown_role"].add(relation, unknown_role);
         }
 
-        if (empty_role) {
+        if (empty_role != 0u) {
             m_outputs["multipolygon_empty_role"].add(relation, empty_role);
         }
 
@@ -183,7 +183,7 @@ class CheckHandler : public osmium::handler::Handler {
                 ++empty_role;
             }
         }
-        if (empty_role) {
+        if (empty_role != 0u) {
             m_outputs["boundary_empty_role"].add(relation, empty_role);
         }
 
@@ -426,7 +426,7 @@ int main(int argc, char* argv[]) {
     });
 
     osmium::MemoryUsage memory_usage;
-    if (memory_usage.peak()) {
+    if (memory_usage.peak() != 0) {
         vout << "Peak memory usage: " << memory_usage.peak() << " MBytes\n";
     }
 

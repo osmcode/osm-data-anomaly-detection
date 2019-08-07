@@ -681,7 +681,7 @@ int main(int argc, char* argv[]) {
     });
 
     osmium::MemoryUsage memory_usage;
-    if (memory_usage.peak()) {
+    if (memory_usage.peak() != 0) {
         vout << "Peak memory usage: " << memory_usage.peak() << " MBytes\n";
     }
 
