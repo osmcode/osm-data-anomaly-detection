@@ -96,6 +96,12 @@ public:
         m_data.reserve(max_bucket_size);
     }
 
+    Bucket(const Bucket&) = delete;
+    Bucket& operator=(const Bucket&) = delete;
+
+    Bucket(Bucket&&) = default;
+    Bucket& operator=(Bucket&&) = default;
+
     ~Bucket() {
         try {
             flush();
