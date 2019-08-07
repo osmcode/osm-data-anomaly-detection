@@ -405,7 +405,7 @@ public:
             return;
         }
 
-        if (way.nodes().size() == 0) {
+        if (way.nodes().empty()) {
             ++m_stats.no_node;
             (*m_writer_no_node)(way);
             return;

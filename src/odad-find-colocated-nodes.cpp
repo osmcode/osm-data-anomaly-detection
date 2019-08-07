@@ -114,7 +114,7 @@ public:
     }
 
     void flush() {
-        if (m_data.size() == 0) {
+        if (m_data.empty()) {
             return;
         }
 
