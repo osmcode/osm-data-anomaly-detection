@@ -1,0 +1,31 @@
+---
+Checks: '*,-cppcoreguidelines-owning-memory,-cppcoreguidelines-pro-bounds-array-to-pointer-decay,-cppcoreguidelines-pro-bounds-pointer-arithmetic,-cppcoreguidelines-pro-type-static-cast-downcast,-fuchsia-*,-google-runtime-references,-hicpp-vararg'
+#
+#  For a list of check options, see:
+#  http://clang.llvm.org/extra/clang-tidy/checks/list.html
+#
+#  Disabled checks:
+#
+#  cppcoreguidelines-owning-memory
+#    We don't want to use the GSL library.
+#
+#  cppcoreguidelines-pro-bounds-array-to-pointer-decay
+#    Limited use and many false positives including for all asserts.
+#
+#  cppcoreguidelines-pro-bounds-pointer-arithmetic
+#    Difficult to get by without it...
+#
+#  cppcoreguidelines-pro-type-static-cast-downcast
+#    This is needed and totally okay if we are sure about the types.
+#
+#  fuchsia-*
+#    Much too strict.
+#
+#  google-runtime-references
+#    This is just a matter of preference.
+#
+#  hicpp-vararg
+#    Too strict, sometimes calling vararg functions is necessary.
+#
+WarningsAsErrors: '*'
+...
