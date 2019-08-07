@@ -164,7 +164,7 @@ std::vector<osmium::Location> find_locations(const std::string& directory) {
 
     for (unsigned int i = 0; i < num_buckets; ++i) {
         const auto filename = build_filename(directory, i);
-        const int fd = ::open(filename.c_str(), O_RDONLY | O_CLOEXEC);
+        const int fd = ::open(filename.c_str(), O_RDONLY | O_CLOEXEC); // NOLINT(hicpp-signed-bitwise)
         if (fd < 0) {
             throw std::system_error{errno, std::system_category(), std::string{"Can't open file '"} + filename + "'"};
         }
