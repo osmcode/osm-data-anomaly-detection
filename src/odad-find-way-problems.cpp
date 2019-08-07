@@ -219,7 +219,7 @@ class CheckHandler : public HandlerWithDB {
     std::unique_ptr<osmium::io::Writer> m_writer_close_nodes;
     std::unique_ptr<osmium::io::Writer> m_writer_many_nodes;
 
-    bool detect_spikes(const osmium::Way& way) noexcept {
+    bool detect_spikes(const osmium::Way& way) {
         if (way.nodes().size() < 3) {
             return false;
         }
@@ -289,7 +289,7 @@ class CheckHandler : public HandlerWithDB {
         return std::acos(cphi);
     }
 
-    bool detect_acute_angles(const osmium::Way& way) noexcept {
+    bool detect_acute_angles(const osmium::Way& way) {
         if (way.nodes().size() < 3) {
             return false;
         }
