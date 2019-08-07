@@ -160,15 +160,15 @@ static void print_help() {
 
 static options_type parse_command_line(int argc, char* argv[]) {
     static struct option long_options[] = {
-        {"help",  no_argument, 0, 'h'},
-        {"quiet", no_argument, 0, 'q'},
-        {0, 0, 0, 0}
+        {"help",  no_argument, nullptr, 'h'},
+        {"quiet", no_argument, nullptr, 'q'},
+        {nullptr, 0, nullptr, 0}
     };
 
     options_type options;
 
     while (true) {
-        const int c = getopt_long(argc, argv, "hq", long_options, 0);
+        const int c = getopt_long(argc, argv, "hq", long_options, nullptr);
         if (c == -1) {
             break;
         }

@@ -276,17 +276,17 @@ static void print_help() {
 
 static options_type parse_command_line(int argc, char* argv[]) {
     static struct option long_options[] = {
-        {"age",     required_argument, 0, 'a'},
-        {"before",  required_argument, 0, 'b'},
-        {"help",          no_argument, 0, 'h'},
-        {"quiet",         no_argument, 0, 'q'},
-        {0, 0, 0, 0}
+        {"age",     required_argument, nullptr, 'a'},
+        {"before",  required_argument, nullptr, 'b'},
+        {"help",          no_argument, nullptr, 'h'},
+        {"quiet",         no_argument, nullptr, 'q'},
+        {nullptr, 0, nullptr, 0}
     };
 
     options_type options;
 
     while (true) {
-        const int c = getopt_long(argc, argv, "a:b:hq", long_options, 0);
+        const int c = getopt_long(argc, argv, "a:b:hq", long_options, nullptr);
         if (c == -1) {
             break;
         }
@@ -297,7 +297,7 @@ static options_type parse_command_line(int argc, char* argv[]) {
                     std::cerr << "You can not use both -a,--age and -b,--before together\n";
                     std::exit(2);
                 }
-                options.before_time = osmium::Timestamp{std::time(0) - std::atoi(optarg) * 60 * 60 * 24};
+                options.before_time = osmium::Timestamp{std::time(nullptr) - std::atoi(optarg) * 60 * 60 * 24};
                 break;
             case 'b':
                 if (options.before_time != osmium::end_of_time()) {
