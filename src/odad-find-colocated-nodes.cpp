@@ -60,15 +60,15 @@ struct stats_type {
 
 // must be a power of 2
 // must change build_filename() function if you change this
-constexpr const int num_buckets = 1 << 8;
+constexpr const unsigned int num_buckets = 1u << 8u;
 
-std::string build_filename(const std::string& dirname, int n) {
+std::string build_filename(const std::string& dirname, unsigned int n) {
     static const char* lookup_hex = "0123456789abcdef";
 
     std::string filename = dirname;
     filename += "/locations_";
-    filename += lookup_hex[(n >> 4) & 0xf];
-    filename += lookup_hex[n & 0xf];
+    filename += lookup_hex[(n >> 4u) & 0xfu];
+    filename += lookup_hex[n & 0xfu];
     filename += ".dat";
 
     return filename;
@@ -87,10 +87,10 @@ class Bucket {
 
 public:
 
-    Bucket(const std::string& dirname, int n) :
+    Bucket(const std::string& dirname, unsigned int n) :
         m_data(),
         m_filename(build_filename(dirname, n)),
-        m_fd(::open(m_filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666)) {
+        m_fd(::open(m_filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666)) { // NOLINT(hicpp-signed-bitwise)
         if (m_fd < 0) {
             throw std::system_error{errno, std::system_category(), std::string{"Can't open file '"} + m_filename + "'"};
         }
@@ -131,7 +131,7 @@ public:
 void extract_locations(const osmium::io::File& input_file, const std::string& directory, const options_type& options) {
     std::vector<Bucket> buckets;
     buckets.reserve(num_buckets);
-    for (int i = 0; i < num_buckets; ++i) {
+    for (unsigned int i = 0; i < num_buckets; ++i) {
         buckets.emplace_back(directory, i);
     }
 
@@ -141,7 +141,7 @@ void extract_locations(const osmium::io::File& input_file, const std::string& di
         progress_bar.update(reader.offset());
         for (const auto& node : buffer.select<osmium::Node>()) {
             if (node.timestamp() < options.before_time) {
-                const auto bucket_num = node.location().x() & (num_buckets-1);
+                const auto bucket_num = node.location().x() & (num_buckets - 1);
                 buckets[bucket_num].set(node.location());
             }
         }
@@ -157,7 +157,7 @@ void extract_locations(const osmium::io::File& input_file, const std::string& di
 std::vector<osmium::Location> find_locations(const std::string& directory) {
     std::vector<osmium::Location> locations;
 
-    for (int i = 0; i < num_buckets; ++i) {
+    for (unsigned int i = 0; i < num_buckets; ++i) {
         const auto filename = build_filename(directory, i);
         const int fd = ::open(filename.c_str(), O_RDONLY);
         if (fd < 0) {
