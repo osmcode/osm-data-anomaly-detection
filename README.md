@@ -176,7 +176,7 @@ command on how to create this.
 
 ## License
 
-Copyright (C) 2017  Jochen Topf (jochen@topf.org)
+Copyright (C) 2019  Jochen Topf (jochen@topf.org)
 
 This program is available under the GNU GENERAL PUBLIC LICENSE Version 3.
 See the file LICENSE.txt for the complete text of the license.
