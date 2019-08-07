@@ -89,7 +89,7 @@ public:
 
     Bucket(const std::string& dirname, unsigned int n) :
         m_filename(build_filename(dirname, n)),
-        m_fd(::open(m_filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666)) { // NOLINT(hicpp-signed-bitwise)
+        m_fd(::open(m_filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666)) { // NOLINT(hicpp-signed-bitwise)
         if (m_fd < 0) {
             throw std::system_error{errno, std::system_category(), std::string{"Can't open file '"} + m_filename + "'"};
         }
@@ -164,7 +164,7 @@ std::vector<osmium::Location> find_locations(const std::string& directory) {
 
     for (unsigned int i = 0; i < num_buckets; ++i) {
         const auto filename = build_filename(directory, i);
-        const int fd = ::open(filename.c_str(), O_RDONLY);
+        const int fd = ::open(filename.c_str(), O_RDONLY | O_CLOEXEC);
         if (fd < 0) {
             throw std::system_error{errno, std::system_category(), std::string{"Can't open file '"} + filename + "'"};
         }
