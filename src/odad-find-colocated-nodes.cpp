@@ -124,7 +124,7 @@ public:
         }
 
         const auto length = ::write(m_fd, m_data.data(), m_data.size());
-        if (length != long(m_data.size())) {
+        if (length != long(m_data.size())) { // NOLINT(google-runtime-int)
             throw std::system_error{errno, std::system_category(), std::string{"can't write to file '"} + m_filename + "'"};
         }
 
