@@ -88,7 +88,6 @@ class Bucket {
 public:
 
     Bucket(const std::string& dirname, unsigned int n) :
-        m_data(),
         m_filename(build_filename(dirname, n)),
         m_fd(::open(m_filename.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666)) { // NOLINT(hicpp-signed-bitwise)
         if (m_fd < 0) {

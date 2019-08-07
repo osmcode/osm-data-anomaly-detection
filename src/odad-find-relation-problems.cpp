@@ -208,9 +208,7 @@ public:
 
     CheckHandler(Outputs& outputs, const options_type& options) :
         m_outputs(outputs),
-        m_options(options),
-        m_stats(),
-        m_mp_filter() {
+        m_options(options) {
     }
 
     void relation(const osmium::Relation& relation) {
