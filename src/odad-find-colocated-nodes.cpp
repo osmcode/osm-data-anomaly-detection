@@ -146,7 +146,7 @@ void extract_locations(const osmium::io::File& input_file, const std::string& di
         progress_bar.update(reader.offset());
         for (const auto& node : buffer.select<osmium::Node>()) {
             if (node.timestamp() < options.before_time) {
-                const auto bucket_num = node.location().x() & (num_buckets - 1);
+                const auto bucket_num = static_cast<uint32_t>(node.location().x()) & (num_buckets - 1);
                 buckets[bucket_num].set(node.location());
             }
         }
