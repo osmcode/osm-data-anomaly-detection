@@ -15,7 +15,7 @@ later are known to work. It also works on modern Visual Studio C++ compilers.
 You also need the following libraries:
 
     Libosmium (>= 2.11.0)
-        http://osmcode.org/libosmium
+        https://osmcode.org/libosmium
         Debian/Ubuntu: libosmium2-dev
 
     Protozero (>= 1.4.5)
@@ -40,7 +40,7 @@ You also need the following libraries:
         CentOS: bzip2-devel
 
     zlib
-        http://www.zlib.net/
+        https://www.zlib.net/
         Debian/Ubuntu: zlib1g-dev
         openSUSE: zlib-devel
         Fedora: zlib-devel
@@ -54,13 +54,13 @@ You also need the following libraries:
         CentOS: expat-devel
 
     cmake
-        http://www.cmake.org/
+        https://cmake.org/
         Debian/Ubuntu: cmake
         openSUSE: cmake
         Fedora: cmake
 
     GDAL/OGR
-        http://gdal.org/
+        https://gdal.org/
         Debian/Ubuntu: libgdal-dev
 
 ## Compiling
@@ -162,7 +162,7 @@ Finds several problems with way geometries:
 
 This command needs as input an OSM file with node locations on ways. See the
 osmium
-[add-locations-to-ways](http://docs.osmcode.org/osmium/latest/osmium-add-locations-to-ways.html)
+[add-locations-to-ways](https://docs.osmcode.org/osmium/latest/osmium-add-locations-to-ways.html)
 command on how to create this.
 
 ### odad-find-relation-problems
@@ -171,7 +171,16 @@ Finds several problems with relations.
 
 This command needs as input an OSM file with node locations on ways. See the
 osmium
-[add-locations-to-ways](http://docs.osmcode.org/osmium/latest/osmium-add-locations-to-ways.html)
+[add-locations-to-ways](https://docs.osmcode.org/osmium/latest/osmium-add-locations-to-ways.html)
+command on how to create this.
+
+### odad-find-multipolygon-problems
+
+Finds several problems with multipolygons without actually building them.
+
+This command needs as input an OSM file with node locations on ways. See the
+osmium
+[add-locations-to-ways](https://docs.osmcode.org/osmium/latest/osmium-add-locations-to-ways.html)
 command on how to create this.
 
 ## License
@@ -183,5 +192,5 @@ See the file LICENSE.txt for the complete text of the license.
 
 ## Author
 
-Jochen Topf (http://jochentopf.com/)
+Jochen Topf (https://jochentopf.com/)
 
