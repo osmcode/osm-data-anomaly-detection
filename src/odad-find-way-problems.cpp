@@ -271,7 +271,7 @@ class CheckHandler : public HandlerWithDB {
         const int64_t day = a.y() - m.y();
         const int64_t dbx = b.x() - m.x();
         const int64_t dby = b.y() - m.y();
-        const double dp = dax * dbx + day * dby;
+        const double dp = static_cast<double>(dax * dbx + day * dby);
         const double m1 = std::sqrt(static_cast<double>(dax * dax + day * day));
         const double m2 = std::sqrt(static_cast<double>(dbx * dbx + dby * dby));
 
