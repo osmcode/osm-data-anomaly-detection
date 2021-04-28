@@ -127,19 +127,19 @@ class CheckHandler : public osmium::handler::Handler {
             }
         }
 
-        if (node_member != 0u) {
+        if (node_member != 0U) {
             m_outputs["multipolygon_node_member"].add(relation, node_member);
         }
 
-        if (relation_member != 0u) {
+        if (relation_member != 0U) {
             m_outputs["multipolygon_relation_member"].add(relation, relation_member);
         }
 
-        if (unknown_role != 0u) {
+        if (unknown_role != 0U) {
             m_outputs["multipolygon_unknown_role"].add(relation, unknown_role);
         }
 
-        if (empty_role != 0u) {
+        if (empty_role != 0U) {
             m_outputs["multipolygon_empty_role"].add(relation, empty_role);
         }
 
@@ -183,7 +183,7 @@ class CheckHandler : public osmium::handler::Handler {
                 ++empty_role;
             }
         }
-        if (empty_role != 0u) {
+        if (empty_role != 0U) {
             m_outputs["boundary_empty_role"].add(relation, empty_role);
         }
 

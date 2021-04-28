@@ -60,15 +60,15 @@ struct stats_type {
 
 // must be a power of 2
 // must change build_filename() function if you change this
-constexpr const unsigned int num_buckets = 1u << 8u;
+constexpr const unsigned int num_buckets = 1U << 8U;
 
 std::string build_filename(const std::string& dirname, unsigned int n) {
     static const char* lookup_hex = "0123456789abcdef";
 
     std::string filename = dirname;
     filename += "/locations_";
-    filename += lookup_hex[(n >> 4u) & 0xfu];
-    filename += lookup_hex[n & 0xfu];
+    filename += lookup_hex[(n >> 4U) & 0xfU];
+    filename += lookup_hex[n & 0xfU];
     filename += ".dat";
 
     return filename;
