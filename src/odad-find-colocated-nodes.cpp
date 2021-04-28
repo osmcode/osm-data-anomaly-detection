@@ -123,8 +123,9 @@ public:
             return;
         }
 
-        const auto length = ::write(m_fd, m_data.data(), m_data.size());
-        if (length != long(m_data.size())) { // NOLINT(google-runtime-int)
+        const auto bytes = m_data.size() * sizeof(osmium::Location);
+        const auto length = ::write(m_fd, m_data.data(), bytes);
+        if (length != long(bytes)) { // NOLINT(google-runtime-int)
             throw std::system_error{errno, std::system_category(), std::string{"can't write to file '"} + m_filename + "'"};
         }
 
@@ -170,8 +171,8 @@ std::vector<osmium::Location> find_locations(const std::string& directory) {
         }
         const auto file_size = osmium::util::file_size(fd);
 
-        {
-            osmium::util::TypedMemoryMapping<osmium::Location> m_mapping {file_size / sizeof(osmium::Location), osmium::util::MemoryMapping::mapping_mode::write_private, fd };
+        if (file_size > 0) {
+            osmium::util::TypedMemoryMapping<osmium::Location> m_mapping{file_size / sizeof(osmium::Location), osmium::util::MemoryMapping::mapping_mode::write_private, fd };
 
             std::sort(m_mapping.begin(), m_mapping.end());
 
@@ -356,6 +357,7 @@ int main(int argc, char* argv[]) try {
 
     vout << "Finding locations with multiple nodes...\n";
     const auto locations = find_locations(output_dirname);
+    vout << "Found " << locations.size() << " locations with multiple nodes.\n";
 
     vout << "Copying colocated nodes and the ways/relations referencing them...\n";
     osmium::io::Reader reader{input_file, osmium::osm_entity_bits::nwr};
