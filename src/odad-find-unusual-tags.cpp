@@ -245,7 +245,7 @@ public:
         m_writer_r_tag_boundary_multipolygon.close();
     }
 
-    const stats_type stats() const noexcept {
+    const stats_type& stats() const noexcept {
         return m_stats;
     }
 

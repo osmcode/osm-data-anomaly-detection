@@ -543,7 +543,7 @@ public:
         (*m_writer_many_nodes).close();
     }
 
-    const stats_type stats() const noexcept {
+    const stats_type& stats() const noexcept {
         return m_stats;
     }
 

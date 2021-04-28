@@ -190,7 +190,7 @@ public:
         m_writers(osmium::item_type::relation)->close();
     }
 
-    const stats_type stats() const noexcept {
+    const stats_type& stats() const noexcept {
         return m_stats;
     }
 
