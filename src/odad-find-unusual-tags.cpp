@@ -39,7 +39,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "utils.hpp"
 
-static const char* program_name = "odad-find-unusual-tags";
+static const char* const program_name = "odad-find-unusual-tags";
 
 struct options_type {
     osmium::Timestamp before_time{osmium::end_of_time()};
@@ -67,8 +67,8 @@ struct stats_type {
     uint64_t r_tag_boundary_multipolygon = 0;
 };
 
-static const char* bad_characters = "=/&<>;'\"?%#@\\,";
-static const char* usual_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:";
+static const char* const bad_characters = "=/&<>;'\"?%#@\\,";
+static const char* const usual_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_:";
 
 class CheckHandler : public osmium::handler::Handler {
 

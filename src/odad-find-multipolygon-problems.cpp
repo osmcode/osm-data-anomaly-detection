@@ -46,7 +46,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "outputs.hpp"
 #include "utils.hpp"
 
-static const char* program_name = "odad-find-multipolygon-problems";
+static const char* const program_name = "odad-find-multipolygon-problems";
 
 struct options_type {
     bool verbose = true;

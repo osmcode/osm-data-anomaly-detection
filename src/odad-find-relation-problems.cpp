@@ -42,7 +42,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "outputs.hpp"
 #include "utils.hpp"
 
-static const char* program_name = "odad-find-relation-problems";
+static const char* const program_name = "odad-find-relation-problems";
 static const size_t min_members_of_large_relations = 1000;
 
 struct options_type {

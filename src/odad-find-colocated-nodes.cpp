@@ -44,7 +44,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "utils.hpp"
 
-static const char* program_name = "odad-find-colocated-nodes";
+static const char* const program_name = "odad-find-colocated-nodes";
 
 struct options_type {
     osmium::Timestamp before_time{osmium::end_of_time()};
