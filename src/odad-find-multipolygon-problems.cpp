@@ -28,6 +28,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <string>
 #include <vector>
 
+#include <boost/iterator/filter_iterator.hpp>
+
 #include <osmium/index/id_set.hpp>
 #include <osmium/io/any_input.hpp>
 #include <osmium/io/file.hpp>
