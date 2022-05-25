@@ -25,14 +25,6 @@ You also need the following libraries:
         Debian/Ubuntu: protozero
         Fedora: protozero-devel
 
-    Utfcpp
-        This is included in the libosmium repository and might or might not
-        have been installed with it. See the libosmium README.
-        http://utfcpp.sourceforge.net/
-        Debian/Ubuntu: libutfcpp-dev
-        openSUSE: utfcpp
-        Fedora: utf8cpp-devel
-
     bz2lib
         http://www.bzip.org/
         Debian/Ubuntu: libbz2-dev
