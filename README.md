@@ -1,4 +1,6 @@
 
+**This repository is now archived. All the stuff in here went to [osmium-surplus](https://github.com/osmcode/osmium-surplus).**
+
 # OSM Data Anomaly Detection
 
 Various programs to detect anomalies in OSM data. Many, but not all, of these
